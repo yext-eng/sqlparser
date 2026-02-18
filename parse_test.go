@@ -1905,6 +1905,22 @@ func TestCreateTable(t *testing.T) {
 			"	unique key by_abc (a, b, c),\n" +
 			"	key by_email (email(10), username)\n" +
 			")",
+		// table check constraints
+		"create table t (\n" +
+			"	id int,\n" +
+			"	check (id > 0)\n" +
+			")",
+		"create table t (\n" +
+			"	id int,\n" +
+			"	constraint id_positive check (id > 0)\n" +
+			")",
+		// mixed column, index, and check constraint definitions
+		"create table t (\n" +
+			"	id int,\n" +
+			"	key by_id (id),\n" +
+			"	check (id > 0),\n" +
+			"	constraint id_lt_100 check (id < 100)\n" +
+			")",
 
 		// table options
 		"create table t (\n" +

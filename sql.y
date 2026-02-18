@@ -99,6 +99,7 @@ func forceEOF(yylex interface{}) {
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
+  constraintDefinition *ConstraintDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
   indexOptions  []*IndexOption
@@ -162,7 +163,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -298,6 +299,7 @@ func forceEOF(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
+%type <constraintDefinition> constraint_definition
 %type <str> index_or_key
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
@@ -738,6 +740,10 @@ table_column_list:
   {
     $$.AddIndex($3)
   }
+| table_column_list ',' constraint_definition
+  {
+    $$.AddConstraint($3)
+  }
 
 column_definition:
   ID column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
@@ -1163,6 +1169,16 @@ index_definition:
 | index_info '(' index_column_list ')'
   {
     $$ = &IndexDefinition{Info: $1, Columns: $3}
+  }
+
+constraint_definition:
+  CHECK openb expression closeb
+  {
+    $$ = &ConstraintDefinition{Expr: $3}
+  }
+| CONSTRAINT sql_id CHECK openb expression closeb
+  {
+    $$ = &ConstraintDefinition{Name: $2, Expr: $5}
   }
 
 index_option_list:
@@ -3190,6 +3206,7 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
+| CHECK
 | COLLATE
 | CONVERT
 | CREATE

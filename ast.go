@@ -1113,9 +1113,10 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns []*ColumnDefinition
-	Indexes []*IndexDefinition
-	Options string
+	Columns     []*ColumnDefinition
+	Indexes     []*IndexDefinition
+	Constraints []*ConstraintDefinition
+	Options     string
 }
 
 // Format formats the node.
@@ -1131,6 +1132,9 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	for _, idx := range ts.Indexes {
 		buf.Myprintf(",\n\t%v", idx)
 	}
+	for _, constraint := range ts.Constraints {
+		buf.Myprintf(",\n\t%v", constraint)
+	}
 
 	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
 }
@@ -1143,6 +1147,11 @@ func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
 // AddIndex appends the given index to the list in the spec
 func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 	ts.Indexes = append(ts.Indexes, id)
+}
+
+// AddConstraint appends the given constraint to the list in the spec
+func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
+	ts.Constraints = append(ts.Constraints, cd)
 }
 
 func (ts *TableSpec) walkSubtree(visit Visit) error {
@@ -1161,8 +1170,38 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+	for _, n := range ts.Constraints {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
 
 	return nil
+}
+
+// ConstraintDefinition describes a table constraint in a CREATE TABLE statement.
+type ConstraintDefinition struct {
+	Name ColIdent
+	Expr Expr
+}
+
+// Format formats the node.
+func (cd *ConstraintDefinition) Format(buf *TrackedBuffer) {
+	if !cd.Name.IsEmpty() {
+		buf.Myprintf("constraint %v ", cd.Name)
+	}
+	buf.Myprintf("check (%v)", cd.Expr)
+}
+
+func (cd *ConstraintDefinition) walkSubtree(visit Visit) error {
+	if cd == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		cd.Name,
+		cd.Expr,
+	)
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement

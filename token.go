@@ -341,6 +341,7 @@ var keywords = map[string]int{
 	"stream":              STREAM,
 	"table":               TABLE,
 	"tables":              TABLES,
+	"temporary":           TEMPORARY,
 	"terminated":          UNUSED,
 	"text":                TEXT,
 	"than":                THAN,

@@ -914,8 +914,13 @@ var (
 	}, {
 		input: "create table a",
 	}, {
+		input: "create temporary table a",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
+	}, {
+		input:  "create temporary table if not exists a (\n\t`a` int\n)",
+		output: "create temporary table a (\n\ta int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {

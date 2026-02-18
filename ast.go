@@ -648,10 +648,12 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // DDL represents a CREATE, ALTER, DROP, RENAME or TRUNCATE statement.
 // Table is set for AlterStr, DropStr, RenameStr, TruncateStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
+// Temporary is true for CREATE TEMPORARY TABLE statements.
 // VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
 // VindexCols is set for AddColVindexStr
 type DDL struct {
 	Action        string
+	Temporary     bool
 	Table         TableName
 	NewName       TableName
 	IfExists      bool
@@ -680,10 +682,14 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
+		temporary := ""
+		if node.Temporary {
+			temporary = "temporary "
+		}
 		if node.TableSpec == nil {
-			buf.Myprintf("%s table %v", node.Action, node.NewName)
+			buf.Myprintf("%s %stable %v", node.Action, temporary, node.NewName)
 		} else {
-			buf.Myprintf("%s table %v %v", node.Action, node.NewName, node.TableSpec)
+			buf.Myprintf("%s %stable %v %v", node.Action, temporary, node.NewName, node.TableSpec)
 		}
 	case DropStr:
 		exists := ""

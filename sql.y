@@ -153,7 +153,7 @@ func forceEOF(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -611,6 +611,11 @@ create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
     $$ = &DDL{Action: CreateStr, NewName: $4}
+    setDDL(yylex, $$)
+  }
+| CREATE TEMPORARY TABLE not_exists_opt table_name
+  {
+    $$ = &DDL{Action: CreateStr, Temporary: true, NewName: $5}
     setDDL(yylex, $$)
   }
 
@@ -3003,6 +3008,7 @@ reserved_keyword:
 | STRAIGHT_JOIN
 | TABLE
 | TABLES
+| TEMPORARY
 | THEN
 | TO
 | TRUE

@@ -1360,6 +1360,17 @@ var (
 	}, {
 		input: "rollback",
 	}, {
+		input: "grant select on appdb.users to 'app'@'%'",
+	}, {
+		input: "grant select, insert on appdb.* to 'app'@'localhost', 'readonly'@'%'",
+	}, {
+		input:  "grant all privileges on *.* to 'root'@'localhost' with grant option",
+		output: "grant all on *.* to 'root'@'localhost' with grant option",
+	}, {
+		input: "revoke select on appdb.users from 'app'@'%'",
+	}, {
+		input: "revoke grant option for select, insert on appdb.* from 'app'@'localhost'",
+	}, {
 		input: "create database test_db",
 	}, {
 		input:  "create schema test_db",
@@ -1438,6 +1449,20 @@ func TestSelectLockInvalid(t *testing.T) {
 		"select 1 from t for share skip locked nowait",
 		"select 1 from t for share lock in share mode",
 		"select 1 from t lock in share mode nowait",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestGrantRevokeInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"grant on appdb.users to 'app'@'%'",
+		"grant select on appdb.users 'app'@'%'",
+		"revoke select on appdb.users to 'app'@'%'",
+		"revoke grant option select on appdb.users from 'app'@'%'",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

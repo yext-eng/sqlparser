@@ -51,6 +51,16 @@ for {
 
 See [parse_test.go](https://github.com/yext/sqlparser/blob/master/parse_test.go) for more examples, or read the [godoc](https://godoc.org/github.com/yext/sqlparser).
 
+## GRANT/REVOKE Support (Minimal)
+
+This parser supports a minimal MySQL 8 subset for privilege management:
+
+- `GRANT <privileges> ON *.*|db.*|db.table TO <user>[, ...] [WITH GRANT OPTION]`
+- `REVOKE [GRANT OPTION FOR] <privileges> ON *.*|db.*|db.table FROM <user>[, ...]`
+- User targets support `'user'`, `'user'@'host'`, and equivalent unquoted identifiers.
+
+Out of scope for this minimal subset: role grants, proxy grants, privilege columns, `IDENTIFIED BY`, TLS/`REQUIRE`, resource options, and other extended MySQL `GRANT`/`REVOKE` variants.
+
 
 ## Porting Instructions
 

@@ -221,6 +221,8 @@ func (*Use) iStatement()        {}
 func (*Begin) iStatement()      {}
 func (*Commit) iStatement()     {}
 func (*Rollback) iStatement()   {}
+func (*Grant) iStatement()      {}
+func (*Revoke) iStatement()     {}
 func (*OtherRead) iStatement()  {}
 func (*OtherAdmin) iStatement() {}
 
@@ -1774,6 +1776,63 @@ func (node *Rollback) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// Grant represents a GRANT statement.
+//
+// Supported syntax is intentionally minimal:
+// - GRANT <privileges> ON *.*|db.*|db.table TO <user targets> [WITH GRANT OPTION]
+type Grant struct {
+	Privileges      Privileges
+	PrivilegeObject *PrivilegeObject
+	Targets         AccountNames
+	WithGrantOption bool
+}
+
+// Format formats the node.
+func (node *Grant) Format(buf *TrackedBuffer) {
+	buf.Myprintf("grant %v on %v to %v", node.Privileges, node.PrivilegeObject, node.Targets)
+	if node.WithGrantOption {
+		buf.Myprintf(" with grant option")
+	}
+}
+
+func (node *Grant) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Privileges,
+		node.PrivilegeObject,
+		node.Targets,
+	)
+}
+
+// Revoke represents a REVOKE statement.
+//
+// Supported syntax is intentionally minimal:
+// - REVOKE [GRANT OPTION FOR] <privileges> ON *.*|db.*|db.table FROM <user targets>
+type Revoke struct {
+	GrantOptionFor  bool
+	Privileges      Privileges
+	PrivilegeObject *PrivilegeObject
+	Targets         AccountNames
+}
+
+// Format formats the node.
+func (node *Revoke) Format(buf *TrackedBuffer) {
+	buf.Myprintf("revoke ")
+	if node.GrantOptionFor {
+		buf.Myprintf("grant option for ")
+	}
+	buf.Myprintf("%v on %v from %v", node.Privileges, node.PrivilegeObject, node.Targets)
+}
+
+func (node *Revoke) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Privileges,
+		node.PrivilegeObject,
+		node.Targets,
+	)
+}
+
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
 // It should be used only as an indicator. It does not contain
 // the full AST for the statement.
@@ -1814,6 +1873,114 @@ func (node Comments) Format(buf *TrackedBuffer) {
 }
 
 func (node Comments) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// Privilege represents a privilege keyword in GRANT/REVOKE.
+type Privilege string
+
+// Format formats the node.
+func (node Privilege) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", string(node))
+}
+
+func (node Privilege) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// Privileges represents a list of privileges.
+type Privileges []Privilege
+
+// Format formats the node.
+func (node Privileges) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, p := range node {
+		buf.Myprintf("%s%v", prefix, p)
+		prefix = ", "
+	}
+}
+
+func (node Privileges) walkSubtree(visit Visit) error {
+	for _, p := range node {
+		if err := Walk(visit, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PrivilegeObject is the ON target in GRANT/REVOKE.
+//
+// Exactly one variant is expected:
+// - Global: *.*
+// - DBName: db.*
+// - TableName: db.table or table
+type PrivilegeObject struct {
+	Global    bool
+	DBName    TableIdent
+	TableName TableName
+}
+
+// Format formats the node.
+func (node *PrivilegeObject) Format(buf *TrackedBuffer) {
+	switch {
+	case node.Global:
+		buf.Myprintf("*.*")
+	case !node.DBName.IsEmpty():
+		buf.Myprintf("%v.*", node.DBName)
+	default:
+		buf.Myprintf("%v", node.TableName)
+	}
+}
+
+func (node *PrivilegeObject) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.DBName,
+		node.TableName,
+	)
+}
+
+// AccountName is a user target in GRANT/REVOKE.
+type AccountName struct {
+	User *SQLVal
+	Host *SQLVal
+}
+
+// Format formats the node.
+func (node *AccountName) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v", node.User)
+	if node.Host != nil {
+		buf.Myprintf("@%v", node.Host)
+	}
+}
+
+func (node *AccountName) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.User,
+		node.Host,
+	)
+}
+
+// AccountNames represents a list of GRANT/REVOKE targets.
+type AccountNames []*AccountName
+
+// Format formats the node.
+func (node AccountNames) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, target := range node {
+		buf.Myprintf("%s%v", prefix, target)
+		prefix = ", "
+	}
+}
+
+func (node AccountNames) walkSubtree(visit Visit) error {
+	for _, target := range node {
+		if err := Walk(visit, target); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

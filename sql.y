@@ -48,6 +48,10 @@ func forceEOF(yylex interface{}) {
   yylex.(*Tokenizer).ForceEOF = true
 }
 
+func isAtSign(tok []byte) bool {
+  return len(tok) == 1 && tok[0] == '@'
+}
+
 %}
 
 %union {
@@ -111,6 +115,11 @@ func forceEOF(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
+  privilege     Privilege
+  privileges    Privileges
+  privilegeObject *PrivilegeObject
+  accountName   *AccountName
+  accountNames  AccountNames
   with          *With
   commonTableExpr *CommonTableExpr
   commonTableExprs CommonTableExprs
@@ -168,6 +177,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES
+%token <bytes> GRANT REVOKE OPTION
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -213,6 +223,12 @@ func forceEOF(yylex interface{}) {
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
+%type <statement> grant_statement revoke_statement
+%type <privilege> privilege
+%type <privileges> privilege_list
+%type <privilegeObject> privilege_object
+%type <accountName> account_name
+%type <accountNames> account_name_list
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> recursive_opt
@@ -352,6 +368,8 @@ command:
 | begin_statement
 | commit_statement
 | rollback_statement
+| grant_statement
+| revoke_statement
 | other_statement
 
 select_statement:
@@ -1686,6 +1704,111 @@ rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+
+grant_statement:
+  GRANT privilege_list ON privilege_object TO account_name_list
+  {
+    $$ = &Grant{
+      Privileges: $2,
+      PrivilegeObject: $4,
+      Targets: $6,
+    }
+  }
+| GRANT privilege_list ON privilege_object TO account_name_list WITH GRANT OPTION
+  {
+    $$ = &Grant{
+      Privileges: $2,
+      PrivilegeObject: $4,
+      Targets: $6,
+      WithGrantOption: true,
+    }
+  }
+
+revoke_statement:
+  REVOKE privilege_list ON privilege_object FROM account_name_list
+  {
+    $$ = &Revoke{
+      Privileges: $2,
+      PrivilegeObject: $4,
+      Targets: $6,
+    }
+  }
+| REVOKE GRANT OPTION FOR privilege_list ON privilege_object FROM account_name_list
+  {
+    $$ = &Revoke{
+      GrantOptionFor: true,
+      Privileges: $5,
+      PrivilegeObject: $7,
+      Targets: $9,
+    }
+  }
+
+privilege_list:
+  privilege
+  {
+    $$ = Privileges{$1}
+  }
+| privilege_list ',' privilege
+  {
+    $$ = append($$, $3)
+  }
+
+privilege:
+  reserved_sql_id
+  {
+    $$ = Privilege($1.Lowered())
+  }
+| ALL
+  {
+    $$ = Privilege(string($1))
+  }
+| ALL sql_id
+  {
+    // Support common "ALL PRIVILEGES" form without introducing a dedicated token.
+    $$ = Privilege(string($1))
+  }
+
+privilege_object:
+  '*' '.' '*'
+  {
+    $$ = &PrivilegeObject{Global: true}
+  }
+| table_id '.' '*'
+  {
+    $$ = &PrivilegeObject{DBName: $1}
+  }
+| table_name
+  {
+    $$ = &PrivilegeObject{TableName: $1}
+  }
+
+account_name_list:
+  account_name
+  {
+    $$ = AccountNames{$1}
+  }
+| account_name_list ',' account_name
+  {
+    $$ = append($1, $3)
+  }
+
+account_name:
+  STRING
+  {
+    $$ = &AccountName{User: NewStrVal($1)}
+  }
+| ID
+  {
+    $$ = &AccountName{User: NewStrVal($1)}
+  }
+| STRING ID STRING
+  {
+    if !isAtSign($2) {
+      yylex.Error("expecting @ in account name")
+      return 1
+    }
+    $$ = &AccountName{User: NewStrVal($1), Host: NewStrVal($3)}
   }
 
 other_statement:
@@ -3276,6 +3399,7 @@ reserved_keyword:
 | FORCE
 | FROM
 | GROUP
+| GRANT
 | HAVING
 | IF
 | IGNORE
@@ -3399,6 +3523,7 @@ non_reserved_keyword:
 | NUMERIC
 | OFFSET
 | ONLY
+| OPTION
 | OPTIMIZE
 | PARTITION
 | POINT
@@ -3414,6 +3539,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| REVOKE
 | ROLLBACK
 | ROW
 | ROWS

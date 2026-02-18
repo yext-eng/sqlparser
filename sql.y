@@ -127,7 +127,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
-%token <bytes> NEXT VALUE SHARE MODE
+%token <bytes> NEXT VALUE SHARE MODE NOWAIT SKIP LOCKED
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
@@ -259,7 +259,7 @@ func forceEOF(yylex interface{}) {
 %type <order> order
 %type <str> asc_desc_opt
 %type <limit> limit_opt
-%type <str> lock_opt
+%type <str> lock_opt lock_modifier_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
@@ -2942,13 +2942,30 @@ lock_opt:
   {
     $$ = ""
   }
-| FOR UPDATE
+| FOR UPDATE lock_modifier_opt
   {
-    $$ = ForUpdateStr
+    $$ = ForUpdateStr + $3
+  }
+| FOR SHARE lock_modifier_opt
+  {
+    $$ = ForShareStr + $3
   }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeStr
+  }
+
+lock_modifier_opt:
+  {
+    $$ = ""
+  }
+| NOWAIT
+  {
+    $$ = NoWaitStr
+  }
+| SKIP LOCKED
+  {
+    $$ = SkipLockedStr
   }
 
 // insert_data expands all combinations into a single rule.
@@ -3367,6 +3384,7 @@ non_reserved_keyword:
 | LEVEL
 | LINESTRING
 | LONGBLOB
+| LOCKED
 | LONGTEXT
 | MEDIUMBLOB
 | MEDIUMINT
@@ -3377,6 +3395,7 @@ non_reserved_keyword:
 | MULTIPOLYGON
 | NAMES
 | NCHAR
+| NOWAIT
 | NUMERIC
 | OFFSET
 | ONLY
@@ -3401,6 +3420,7 @@ non_reserved_keyword:
 | SESSION
 | SERIALIZABLE
 | SHARE
+| SKIP
 | SIGNED
 | SMALLINT
 | SPATIAL

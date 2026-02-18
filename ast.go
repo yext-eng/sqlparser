@@ -340,8 +340,11 @@ const (
 
 // Select.Lock
 const (
-	ForUpdateStr = " for update"
-	ShareModeStr = " lock in share mode"
+	ForUpdateStr  = " for update"
+	ForShareStr   = " for share"
+	NoWaitStr     = " nowait"
+	SkipLockedStr = " skip locked"
+	ShareModeStr  = " lock in share mode"
 )
 
 // Select.Cache

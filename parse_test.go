@@ -140,6 +140,16 @@ var (
 	}, {
 		input: "select /* for update */ 1 from t for update",
 	}, {
+		input: "select /* for update nowait */ 1 from t for update nowait",
+	}, {
+		input: "select /* for update skip locked */ 1 from t for update skip locked",
+	}, {
+		input: "select /* for share */ 1 from t for share",
+	}, {
+		input: "select /* for share nowait */ 1 from t for share nowait",
+	}, {
+		input: "select /* for share skip locked */ 1 from t for share skip locked",
+	}, {
 		input: "select /* lock in share mode */ 1 from t lock in share mode",
 	}, {
 		input: "select /* select list */ 1, 2 from t",
@@ -1420,6 +1430,22 @@ func TestWindowInvalid(t *testing.T) {
 	}
 }
 
+func TestSelectLockInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"select 1 from t for update nowait skip locked",
+		"select 1 from t for update skip locked nowait",
+		"select 1 from t for share nowait skip locked",
+		"select 1 from t for share skip locked nowait",
+		"select 1 from t for share lock in share mode",
+		"select 1 from t lock in share mode nowait",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
 func TestCaseSensitivity(t *testing.T) {
 	validSQL := []struct {
 		input  string
@@ -1502,6 +1528,12 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
+	}, {
+		input:  "select /* FOR SHARE NOWAIT */ 1 from t FOR SHARE NOWAIT",
+		output: "select /* FOR SHARE NOWAIT */ 1 from t for share nowait",
+	}, {
+		input:  "select /* FOR UPDATE SKIP LOCKED */ 1 from t FOR UPDATE SKIP LOCKED",
+		output: "select /* FOR UPDATE SKIP LOCKED */ 1 from t for update skip locked",
 	}, {
 		input:  "select next VALUE from t",
 		output: "select next 1 values from t",

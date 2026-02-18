@@ -326,6 +326,7 @@ type Select struct {
 	Where       *Where
 	GroupBy     GroupBy
 	Having      *Where
+	Windows     WindowDefinitions
 	OrderBy     OrderBy
 	Limit       *Limit
 	Lock        string
@@ -364,10 +365,10 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	if node.With != nil {
 		buf.Myprintf("%v ", node.With)
 	}
-	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%s",
+	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%v%s",
 		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
-		node.GroupBy, node.Having, node.OrderBy,
+		node.GroupBy, node.Having, node.Windows, node.OrderBy,
 		node.Limit, node.Lock)
 }
 
@@ -384,8 +385,197 @@ func (node *Select) walkSubtree(visit Visit) error {
 		node.Where,
 		node.GroupBy,
 		node.Having,
+		node.Windows,
 		node.OrderBy,
 		node.Limit,
+	)
+}
+
+// WindowDefinitions represents the WINDOW clause in a SELECT statement.
+type WindowDefinitions []*WindowDefinition
+
+// Format formats the node.
+func (node WindowDefinitions) Format(buf *TrackedBuffer) {
+	prefix := " window "
+	for _, window := range node {
+		buf.Myprintf("%s%v", prefix, window)
+		prefix = ", "
+	}
+}
+
+func (node WindowDefinitions) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WindowDefinition describes a named window in a WINDOW clause.
+type WindowDefinition struct {
+	Name ColIdent
+	Spec *WindowSpec
+}
+
+// Format formats the node.
+func (node *WindowDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v as (%v)", node.Name, node.Spec)
+}
+
+func (node *WindowDefinition) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.Spec,
+	)
+}
+
+// WindowSpec describes a window specification used by OVER(...) or WINDOW.
+type WindowSpec struct {
+	Name        ColIdent
+	PartitionBy Exprs
+	OrderBy     OrderBy
+	Frame       *WindowFrame
+}
+
+// Format formats the node.
+func (node *WindowSpec) Format(buf *TrackedBuffer) {
+	first := true
+	if !node.Name.IsEmpty() {
+		buf.Myprintf("%v", node.Name)
+		first = false
+	}
+	if node.PartitionBy != nil {
+		if !first {
+			buf.WriteString(" ")
+		}
+		buf.Myprintf("partition by %v", node.PartitionBy)
+		first = false
+	}
+	if node.OrderBy != nil {
+		if !first {
+			buf.WriteString(" ")
+		}
+		buf.Myprintf("order by %v", node.OrderBy[0])
+		for _, order := range node.OrderBy[1:] {
+			buf.Myprintf(", %v", order)
+		}
+		first = false
+	}
+	if node.Frame != nil {
+		if !first {
+			buf.WriteString(" ")
+		}
+		buf.Myprintf("%v", node.Frame)
+	}
+}
+
+func (node *WindowSpec) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.PartitionBy,
+		node.OrderBy,
+		node.Frame,
+	)
+}
+
+// OverClause describes an OVER clause attached to a function expression.
+type OverClause struct {
+	Name ColIdent
+	Spec *WindowSpec
+}
+
+// Format formats the node.
+func (node *OverClause) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	if !node.Name.IsEmpty() {
+		buf.Myprintf(" over %v", node.Name)
+		return
+	}
+	buf.Myprintf(" over (%v)", node.Spec)
+}
+
+func (node *OverClause) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.Spec,
+	)
+}
+
+// WindowFrame describes a frame clause in a window specification.
+type WindowFrame struct {
+	Unit  string
+	Start *WindowFrameBound
+	End   *WindowFrameBound
+}
+
+const (
+	RowsStr               = "rows"
+	RangeStr              = "range"
+	UnboundedPrecedingStr = "unbounded preceding"
+	UnboundedFollowingStr = "unbounded following"
+	CurrentRowStr         = "current row"
+	ExprPrecedingStr      = "preceding"
+	ExprFollowingStr      = "following"
+)
+
+// Format formats the node.
+func (node *WindowFrame) Format(buf *TrackedBuffer) {
+	if node.End == nil {
+		buf.Myprintf("%s %v", node.Unit, node.Start)
+		return
+	}
+	buf.Myprintf("%s between %v and %v", node.Unit, node.Start, node.End)
+}
+
+func (node *WindowFrame) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Start,
+		node.End,
+	)
+}
+
+// WindowFrameBound describes one frame bound in a frame clause.
+type WindowFrameBound struct {
+	Type string
+	Expr Expr
+}
+
+// Format formats the node.
+func (node *WindowFrameBound) Format(buf *TrackedBuffer) {
+	switch node.Type {
+	case UnboundedPrecedingStr, UnboundedFollowingStr, CurrentRowStr:
+		buf.WriteString(node.Type)
+	default:
+		buf.Myprintf("%v %s", node.Expr, node.Type)
+	}
+}
+
+func (node *WindowFrameBound) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
 	)
 }
 
@@ -2739,6 +2929,7 @@ type FuncExpr struct {
 	Name      ColIdent
 	Distinct  bool
 	Exprs     SelectExprs
+	Over      *OverClause
 }
 
 // Format formats the node.
@@ -2753,7 +2944,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// Function names should not be back-quoted even
 	// if they match a reserved word. So, print the
 	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+	buf.Myprintf("%s(%s%v)%v", node.Name.String(), distinct, node.Exprs, node.Over)
 }
 
 func (node *FuncExpr) walkSubtree(visit Visit) error {
@@ -2765,6 +2956,7 @@ func (node *FuncExpr) walkSubtree(visit Visit) error {
 		node.Qualifier,
 		node.Name,
 		node.Exprs,
+		node.Over,
 	)
 }
 
@@ -2776,6 +2968,26 @@ func (node *FuncExpr) replace(from, to Expr) bool {
 		}
 		if replaceExprs(from, to, &aliased.Expr) {
 			return true
+		}
+	}
+	if node.Over != nil && node.Over.Spec != nil {
+		for i := range node.Over.Spec.PartitionBy {
+			if replaceExprs(from, to, &node.Over.Spec.PartitionBy[i]) {
+				return true
+			}
+		}
+		for _, order := range node.Over.Spec.OrderBy {
+			if replaceExprs(from, to, &order.Expr) {
+				return true
+			}
+		}
+		if node.Over.Spec.Frame != nil {
+			if node.Over.Spec.Frame.Start != nil && replaceExprs(from, to, &node.Over.Spec.Frame.Start.Expr) {
+				return true
+			}
+			if node.Over.Spec.Frame.End != nil && replaceExprs(from, to, &node.Over.Spec.Frame.End.Expr) {
+				return true
+			}
 		}
 	}
 	return false
@@ -2812,11 +3024,12 @@ type GroupConcatExpr struct {
 	Exprs     SelectExprs
 	OrderBy   OrderBy
 	Separator string
+	Over      *OverClause
 }
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+	buf.Myprintf("group_concat(%s%v%v%s)%v", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Over)
 }
 
 func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
@@ -2827,6 +3040,7 @@ func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
 		visit,
 		node.Exprs,
 		node.OrderBy,
+		node.Over,
 	)
 }
 
@@ -2843,6 +3057,26 @@ func (node *GroupConcatExpr) replace(from, to Expr) bool {
 	for _, order := range node.OrderBy {
 		if replaceExprs(from, to, &order.Expr) {
 			return true
+		}
+	}
+	if node.Over != nil && node.Over.Spec != nil {
+		for i := range node.Over.Spec.PartitionBy {
+			if replaceExprs(from, to, &node.Over.Spec.PartitionBy[i]) {
+				return true
+			}
+		}
+		for _, order := range node.Over.Spec.OrderBy {
+			if replaceExprs(from, to, &order.Expr) {
+				return true
+			}
+		}
+		if node.Over.Spec.Frame != nil {
+			if node.Over.Spec.Frame.Start != nil && replaceExprs(from, to, &node.Over.Spec.Frame.Start.Expr) {
+				return true
+			}
+			if node.Over.Spec.Frame.End != nil && replaceExprs(from, to, &node.Over.Spec.Frame.End.Expr) {
+				return true
+			}
 		}
 	}
 	return false

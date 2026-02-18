@@ -428,6 +428,18 @@ var (
 	}, {
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
+		input:  "select /* window basic */ row_number() over (partition by dept order by salary) from t",
+		output: "select /* window basic */ row_number() over (partition by dept order by salary asc) from t",
+	}, {
+		input:  "select /* window named */ sum(v) over w from t window w as (partition by dept order by ts rows between unbounded preceding and current row)",
+		output: "select /* window named */ sum(v) over w from t window w as (partition by dept order by ts asc rows between unbounded preceding and current row)",
+	}, {
+		input:  "select /* window inherit */ sum(v) over (w order by ts) from t window w as (partition by dept)",
+		output: "select /* window inherit */ sum(v) over (w order by ts asc) from t window w as (partition by dept)",
+	}, {
+		input:  "select /* window multi */ row_number() over (order by a), rank() over (order by b desc) from t",
+		output: "select /* window multi */ row_number() over (order by a asc), rank() over (order by b desc) from t",
+	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
 		input: "select /* current_timestamp as func */ current_timestamp() from t",
@@ -934,13 +946,13 @@ var (
 	}, {
 		input: "create temporary table a",
 	}, {
-		input: "create table a as select 1",
+		input:  "create table a as select 1",
 		output: "create table a as select 1 from dual",
 	}, {
-		input: "create table if not exists a as select 1",
+		input:  "create table if not exists a as select 1",
 		output: "create table a as select 1 from dual",
 	}, {
-		input: "create temporary table if not exists a as select 1",
+		input:  "create temporary table if not exists a as select 1",
 		output: "create temporary table a as select 1 from dual",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
@@ -1372,6 +1384,21 @@ func TestCTEInvalid(t *testing.T) {
 		"with cte as select 1 select * from cte",
 		"with recursive select 1",
 		"with cte as (select 1) with d as (select 2) select * from cte",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestWindowInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"select row_number() over from t",
+		"select row_number() over () from t",
+		"select row_number() over (partition dept) from t",
+		"select row_number() over (rows between 1 preceding and) from t",
+		"select 1 from t window w (partition by a)",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

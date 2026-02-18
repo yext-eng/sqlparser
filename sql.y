@@ -113,6 +113,12 @@ func forceEOF(yylex interface{}) {
   with          *With
   commonTableExpr *CommonTableExpr
   commonTableExprs CommonTableExprs
+  windows       WindowDefinitions
+  window        *WindowDefinition
+  windowSpec    *WindowSpec
+  overClause    *OverClause
+  frame         *WindowFrame
+  frameBound    *WindowFrameBound
 }
 
 %token LEX_ERROR
@@ -194,6 +200,7 @@ func forceEOF(yylex interface{}) {
 
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH RECURSIVE QUERY EXPANSION
+%token <bytes> OVER WINDOW ROWS RANGE PRECEDING FOLLOWING CURRENT ROW UNBOUNDED
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <bytes> UNUSED
@@ -241,6 +248,12 @@ func forceEOF(yylex interface{}) {
 %type <expr> expression_opt else_expression_opt
 %type <exprs> group_by_opt
 %type <expr> having_opt
+%type <windows> window_clause_opt window_definition_list
+%type <window> window_definition
+%type <windowSpec> window_spec
+%type <frame> window_frame_clause
+%type <frameBound> window_frame_bound
+%type <overClause> opt_over_clause
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -429,9 +442,9 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt window_clause_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), Windows: $11}
   }
 
 union_lhs:
@@ -2308,17 +2321,17 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb select_expression_list_opt closeb
+  sql_id openb select_expression_list_opt closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3, Over: $5}
   }
-| sql_id openb DISTINCT select_expression_list closeb
+| sql_id openb DISTINCT select_expression_list closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4, Over: $6}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb select_expression_list_opt closeb opt_over_clause
   {
-    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5, Over: $7}
   }
 
 /*
@@ -2326,13 +2339,13 @@ function_call_generic:
   as a result
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb select_expression_list closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3, Over: $5}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb select_expression_list closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3, Over: $5}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
@@ -2374,9 +2387,9 @@ function_call_keyword:
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb opt_over_clause
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Over: $8}
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
@@ -2392,41 +2405,41 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_precision_opt
+  CURRENT_TIMESTAMP func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent("current_timestamp"), Over: $3}
   }
-| UTC_TIMESTAMP func_datetime_precision_opt
+| UTC_TIMESTAMP func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp"), Over: $3}
   }
-| UTC_TIME func_datetime_precision_opt
+| UTC_TIME func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_time")}
+    $$ = &FuncExpr{Name:NewColIdent("utc_time"), Over: $3}
   }
-| UTC_DATE func_datetime_precision_opt
+| UTC_DATE func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_date")}
-  }
-  // now
-| LOCALTIME func_datetime_precision_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent("localtime")}
+    $$ = &FuncExpr{Name:NewColIdent("utc_date"), Over: $3}
   }
   // now
-| LOCALTIMESTAMP func_datetime_precision_opt
+| LOCALTIME func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
+    $$ = &FuncExpr{Name:NewColIdent("localtime"), Over: $3}
+  }
+  // now
+| LOCALTIMESTAMP func_datetime_precision_opt opt_over_clause
+  {
+    $$ = &FuncExpr{Name:NewColIdent("localtimestamp"), Over: $3}
   }
   // curdate
-| CURRENT_DATE func_datetime_precision_opt
+| CURRENT_DATE func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_date")}
+    $$ = &FuncExpr{Name:NewColIdent("current_date"), Over: $3}
   }
   // curtime
-| CURRENT_TIME func_datetime_precision_opt
+| CURRENT_TIME func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_time")}
+    $$ = &FuncExpr{Name:NewColIdent("current_time"), Over: $3}
   }
 
 func_datetime_precision_opt:
@@ -2438,21 +2451,34 @@ func_datetime_precision_opt:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb select_expression_list closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3, Over: $5}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb select_expression_list_opt closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3, Over: $5}
   }
-| MOD openb select_expression_list closeb
+| MOD openb select_expression_list closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3, Over: $5}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb select_expression_list closeb opt_over_clause
   {
-    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3, Over: $5}
+  }
+
+opt_over_clause:
+  {
+    $$ = nil
+  }
+| OVER sql_id
+  {
+    $$ = &OverClause{Name: $2}
+  }
+| OVER openb window_spec closeb
+  {
+    $$ = &OverClause{Spec: $3}
   }
 
 match_option:
@@ -2669,6 +2695,125 @@ having_opt:
 | HAVING expression
   {
     $$ = $2
+  }
+
+window_clause_opt:
+  {
+    $$ = nil
+  }
+| WINDOW window_definition_list
+  {
+    $$ = $2
+  }
+
+window_definition_list:
+  window_definition
+  {
+    $$ = WindowDefinitions{$1}
+  }
+| window_definition_list ',' window_definition
+  {
+    $$ = append($$, $3)
+  }
+
+window_definition:
+  sql_id AS openb window_spec closeb
+  {
+    $$ = &WindowDefinition{Name: $1, Spec: $4}
+  }
+
+window_spec:
+  sql_id
+  {
+    $$ = &WindowSpec{Name: $1}
+  }
+| PARTITION BY expression_list
+  {
+    $$ = &WindowSpec{PartitionBy: $3}
+  }
+| ORDER BY order_list
+  {
+    $$ = &WindowSpec{OrderBy: $3}
+  }
+| PARTITION BY expression_list ORDER BY order_list
+  {
+    $$ = &WindowSpec{PartitionBy: $3, OrderBy: $6}
+  }
+| sql_id PARTITION BY expression_list
+  {
+    $$ = &WindowSpec{Name: $1, PartitionBy: $4}
+  }
+| sql_id ORDER BY order_list
+  {
+    $$ = &WindowSpec{Name: $1, OrderBy: $4}
+  }
+| sql_id PARTITION BY expression_list ORDER BY order_list
+  {
+    $$ = &WindowSpec{Name: $1, PartitionBy: $4, OrderBy: $7}
+  }
+| PARTITION BY expression_list window_frame_clause
+  {
+    $$ = &WindowSpec{PartitionBy: $3, Frame: $4}
+  }
+| ORDER BY order_list window_frame_clause
+  {
+    $$ = &WindowSpec{OrderBy: $3, Frame: $4}
+  }
+| PARTITION BY expression_list ORDER BY order_list window_frame_clause
+  {
+    $$ = &WindowSpec{PartitionBy: $3, OrderBy: $6, Frame: $7}
+  }
+| sql_id PARTITION BY expression_list window_frame_clause
+  {
+    $$ = &WindowSpec{Name: $1, PartitionBy: $4, Frame: $5}
+  }
+| sql_id ORDER BY order_list window_frame_clause
+  {
+    $$ = &WindowSpec{Name: $1, OrderBy: $4, Frame: $5}
+  }
+| sql_id PARTITION BY expression_list ORDER BY order_list window_frame_clause
+  {
+    $$ = &WindowSpec{Name: $1, PartitionBy: $4, OrderBy: $7, Frame: $8}
+  }
+
+window_frame_clause:
+  ROWS window_frame_bound
+  {
+    $$ = &WindowFrame{Unit: RowsStr, Start: $2}
+  }
+| ROWS BETWEEN window_frame_bound AND window_frame_bound
+  {
+    $$ = &WindowFrame{Unit: RowsStr, Start: $3, End: $5}
+  }
+| RANGE window_frame_bound
+  {
+    $$ = &WindowFrame{Unit: RangeStr, Start: $2}
+  }
+| RANGE BETWEEN window_frame_bound AND window_frame_bound
+  {
+    $$ = &WindowFrame{Unit: RangeStr, Start: $3, End: $5}
+  }
+
+window_frame_bound:
+  UNBOUNDED PRECEDING
+  {
+    $$ = &WindowFrameBound{Type: UnboundedPrecedingStr}
+  }
+| UNBOUNDED FOLLOWING
+  {
+    $$ = &WindowFrameBound{Type: UnboundedFollowingStr}
+  }
+| CURRENT ROW
+  {
+    $$ = &WindowFrameBound{Type: CurrentRowStr}
+  }
+| value_expression PRECEDING
+  {
+    $$ = &WindowFrameBound{Type: ExprPrecedingStr, Expr: $1}
+  }
+| value_expression FOLLOWING
+  {
+    $$ = &WindowFrameBound{Type: ExprFollowingStr, Expr: $1}
   }
 
 order_by_opt:
@@ -3074,6 +3219,7 @@ reserved_keyword:
 | ON
 | OR
 | ORDER
+| OVER
 | OUTER
 | REGEXP
 | RENAME
@@ -3102,6 +3248,7 @@ reserved_keyword:
 | VALUES
 | WHEN
 | WHERE
+| WINDOW
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -3123,6 +3270,7 @@ non_reserved_keyword:
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
+| CURRENT
 | DATE
 | DATETIME
 | DECIMAL
@@ -3131,6 +3279,7 @@ non_reserved_keyword:
 | ENUM
 | EXPANSION
 | FLOAT_TYPE
+| FOLLOWING
 | FOREIGN
 | FULLTEXT
 | GEOMETRY
@@ -3165,9 +3314,11 @@ non_reserved_keyword:
 | PARTITION
 | POINT
 | POLYGON
+| PRECEDING
 | PRIMARY
 | PROCEDURE
 | QUERY
+| RANGE
 | READ
 | RECURSIVE
 | REAL
@@ -3175,6 +3326,8 @@ non_reserved_keyword:
 | REPAIR
 | REPEATABLE
 | ROLLBACK
+| ROW
+| ROWS
 | SESSION
 | SERIALIZABLE
 | SHARE
@@ -3194,6 +3347,7 @@ non_reserved_keyword:
 | TRIGGER
 | TRUNCATE
 | UNCOMMITTED
+| UNBOUNDED
 | UNSIGNED
 | UNUSED
 | VARBINARY

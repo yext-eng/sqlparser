@@ -1199,6 +1199,9 @@ type ColumnType struct {
 	Default       *SQLVal
 	OnUpdate      *SQLVal
 	Comment       *SQLVal
+	GeneratedExpr Expr
+	// GeneratedStorage is either "virtual" or "stored" when specified.
+	GeneratedStorage string
 
 	// Numeric field options
 	Length   *SQLVal
@@ -1230,6 +1233,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 
 	if ct.EnumValues != nil {
 		buf.Myprintf("(%s)", strings.Join(ct.EnumValues, ", "))
+	}
+	if ct.GeneratedExpr != nil {
+		buf.Myprintf(" %s %s %s (%v)", keywordStrings[GENERATED], keywordStrings[ALWAYS], keywordStrings[AS], ct.GeneratedExpr)
+		if ct.GeneratedStorage != "" {
+			buf.Myprintf(" %s", ct.GeneratedStorage)
+		}
 	}
 
 	opts := make([]string, 0, 16)
@@ -1404,7 +1413,10 @@ func (ct *ColumnType) SQLType() querypb.Type {
 }
 
 func (ct *ColumnType) walkSubtree(visit Visit) error {
-	return nil
+	if ct == nil {
+		return nil
+	}
+	return Walk(visit, ct.GeneratedExpr)
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

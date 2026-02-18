@@ -1840,6 +1840,16 @@ func TestCreateTable(t *testing.T) {
 			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
 			")",
 
+		// test generated columns
+		"create table t (\n" +
+			"	price int,\n" +
+			"	qty int,\n" +
+			"	total int generated always as (price * qty),\n" +
+			"	total_virtual int generated always as (price * qty) virtual,\n" +
+			"	total_stored int generated always as ((price * qty) + 1) stored key,\n" +
+			"	total_comment int generated always as (ifnull(price, 0) * qty) stored comment 'computed'\n" +
+			")",
+
 		// test defining indexes separately
 		"create table t (\n" +
 			"	id int auto_increment,\n" +
@@ -1950,6 +1960,19 @@ func TestCreateTable(t *testing.T) {
 	tree, err = ParseStrictDDL(sql)
 	if tree != nil || err == nil {
 		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+	}
+
+	invalidCreateTableGeneratedSQL := []string{
+		"create table t (total int generated as (1))",
+		"create table t (total int generated always as 1)",
+		"create table t (total int generated always (1))",
+		"create table t (total int generated always as (1) nonsense)",
+	}
+	for _, sql := range invalidCreateTableGeneratedSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
 	}
 
 	testCases := []struct {

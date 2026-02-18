@@ -181,7 +181,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
 // Type Modifiers
-%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
+%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL GENERATED ALWAYS STORED VIRTUAL
 
 // Supported SHOW tokens
 %token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST
@@ -293,6 +293,7 @@ func forceEOF(yylex interface{}) {
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> null_opt auto_increment_opt
+%type <str> generated_storage_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -749,6 +750,14 @@ column_definition:
     $2.Comment = $8
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
+| ID column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
+  {
+    $2.GeneratedExpr = $7
+    $2.GeneratedStorage = $9
+    $2.KeyOpt = $10
+    $2.Comment = $11
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
 column_type:
   numeric_type unsigned_opt zero_fill_opt
   {
@@ -1079,6 +1088,19 @@ auto_increment_opt:
 | AUTO_INCREMENT
   {
     $$ = BoolVal(true)
+  }
+
+generated_storage_opt:
+  {
+    $$ = ""
+  }
+| VIRTUAL
+  {
+    $$ = string($1)
+  }
+| STORED
+  {
+    $$ = string($1)
   }
 
 charset_opt:
@@ -3264,6 +3286,7 @@ reserved_keyword:
 */
 non_reserved_keyword:
   AGAINST
+| ALWAYS
 | BEGIN
 | BIGINT
 | BIT
@@ -3287,6 +3310,7 @@ non_reserved_keyword:
 | FOLLOWING
 | FOREIGN
 | FULLTEXT
+| GENERATED
 | GEOMETRY
 | GEOMETRYCOLLECTION
 | GLOBAL
@@ -3341,6 +3365,7 @@ non_reserved_keyword:
 | SPATIAL
 | START
 | STATUS
+| STORED
 | TEXT
 | THAN
 | TIME
@@ -3365,6 +3390,7 @@ non_reserved_keyword:
 | VITESS_SHARDS
 | VITESS_TABLETS
 | VSCHEMA_TABLES
+| VIRTUAL
 | WITH
 | WRITE
 | YEAR

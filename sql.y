@@ -223,6 +223,7 @@ func isAtSign(tok []byte) bool {
 %type <statement> command
 %type <selStmt> select_statement select_statement_no_with base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> values_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -263,7 +264,9 @@ func isAtSign(tok []byte) bool {
 %type <colTuple> col_tuple
 %type <exprs> expression_list
 %type <values> tuple_list
+%type <values> values_row_list
 %type <valTuple> row_tuple tuple_or_empty
+%type <valTuple> values_row
 %type <expr> tuple_expression
 %type <subquery> subquery
 %type <colName> column_name
@@ -361,6 +364,7 @@ command:
   }
 | stream_statement
 | insert_statement
+| values_statement
 | update_statement
 | delete_statement
 | set_statement
@@ -519,6 +523,12 @@ insert_statement:
       vals = append(vals, updateList.Expr)
     }
     $$ = &Insert{With: $1, Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: Values{vals}, OnDup: OnDup($9)}
+  }
+
+values_statement:
+  VALUES values_row_list
+  {
+    $$ = &ValuesStatement{Rows: $2}
   }
 
 insert_or_replace:
@@ -3223,6 +3233,26 @@ tuple_list:
 | tuple_list ',' tuple_or_empty
   {
     $$ = append($1, $3)
+  }
+
+values_row_list:
+  values_row
+  {
+    $$ = Values{$1}
+  }
+| values_row_list ',' values_row
+  {
+    $$ = append($1, $3)
+  }
+
+values_row:
+  ROW row_tuple
+  {
+    $$ = $2
+  }
+| row_tuple
+  {
+    $$ = $1
   }
 
 tuple_or_empty:

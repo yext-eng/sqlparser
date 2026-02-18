@@ -673,6 +673,14 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
+		input: "values row(1)",
+	}, {
+		input:  "values (1), (2, 3)",
+		output: "values row(1), row(2, 3)",
+	}, {
+		input:  "VALUES ROW(1),ROW(2, 3)",
+		output: "values row(1), row(2, 3)",
+	}, {
 		input:  "with c as (select 1) insert into t select * from c",
 		output: "with c as (select 1 from dual) insert into t select * from c",
 	}, {
@@ -1498,6 +1506,17 @@ func TestJSONTableInvalid(t *testing.T) {
 		// ON EMPTY / ON ERROR clauses are intentionally unsupported in the initial JSON_TABLE grammar.
 		"select * from json_table(doc, '$' columns (id int path '$.id' null on empty)) as jt",
 		"select * from json_table(doc, '$' columns (id int path '$.id' null on error)) as jt",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestValuesInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"values row()",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

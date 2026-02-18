@@ -48,6 +48,20 @@ func TestAppend(t *testing.T) {
 	}
 }
 
+func TestValuesStatement(t *testing.T) {
+	tree, err := Parse("values row(1), row(2, 3)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stmt, ok := tree.(*ValuesStatement)
+	if !ok {
+		t.Fatalf("Parse returned %T, want *ValuesStatement", tree)
+	}
+	if got, want := String(stmt), "values row(1), row(2, 3)"; got != want {
+		t.Errorf("String(stmt): %q, want %q", got, want)
+	}
+}
+
 func TestSelect(t *testing.T) {
 	tree, err := Parse("select * from t where a = 1")
 	if err != nil {

@@ -20,9 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/xwb1989/sqlparser/dependency/sqltypes"
+	"github.com/yext/sqlparser/dependency/sqltypes"
 
-	"github.com/xwb1989/sqlparser/dependency/querypb"
+	"github.com/yext/sqlparser/dependency/querypb"
 )
 
 func TestNewParsedQuery(t *testing.T) {

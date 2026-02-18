@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/xwb1989/sqlparser/dependency/bytes2"
-	"github.com/xwb1989/sqlparser/dependency/sqltypes"
+	"github.com/yext/sqlparser/dependency/bytes2"
+	"github.com/yext/sqlparser/dependency/sqltypes"
 )
 
 const (

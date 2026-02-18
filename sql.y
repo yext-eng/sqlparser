@@ -135,7 +135,8 @@ func isAtSign(tok []byte) bool {
 }
 
 %token LEX_ERROR
-%left <bytes> UNION
+%left <bytes> UNION EXCEPT
+%left <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
@@ -221,7 +222,7 @@ func isAtSign(tok []byte) bool {
 %token <bytes> UNUSED
 
 %type <statement> command
-%type <selStmt> select_statement select_statement_no_with base_select union_lhs union_rhs
+%type <selStmt> select_statement select_statement_no_with base_select union_lhs union_rhs intersect_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
 %type <statement> values_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
@@ -235,7 +236,7 @@ func isAtSign(tok []byte) bool {
 %type <accountName> account_name
 %type <accountNames> account_name_list
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace
+%type <str> union_op union_or_except_op intersect_op except_op insert_or_replace
 %type <str> recursive_opt
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
@@ -408,7 +409,11 @@ select_statement_no_with:
     sel.Lock = $4
     $$ = sel
   }
-| union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
+| union_lhs union_or_except_op intersect_rhs order_by_opt limit_opt lock_opt
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
+  }
+| union_lhs intersect_op union_rhs order_by_opt limit_opt lock_opt
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
   }
@@ -1881,6 +1886,54 @@ union_op:
 | UNION DISTINCT
   {
     $$ = UnionDistinctStr
+  }
+
+union_or_except_op:
+  union_op
+  {
+    $$ = $1
+  }
+| except_op
+  {
+    $$ = $1
+  }
+
+intersect_op:
+  INTERSECT
+  {
+    $$ = IntersectStr
+  }
+| INTERSECT ALL
+  {
+    $$ = IntersectAllStr
+  }
+| INTERSECT DISTINCT
+  {
+    $$ = IntersectDistinctStr
+  }
+
+except_op:
+  EXCEPT
+  {
+    $$ = ExceptStr
+  }
+| EXCEPT ALL
+  {
+    $$ = ExceptAllStr
+  }
+| EXCEPT DISTINCT
+  {
+    $$ = ExceptDistinctStr
+  }
+
+intersect_rhs:
+  union_rhs
+  {
+    $$ = $1
+  }
+| intersect_rhs intersect_op union_rhs
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
 
 cache_opt:

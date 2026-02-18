@@ -110,3 +110,43 @@ func TestIsPrecedence(t *testing.T) {
 		}
 	}
 }
+
+func TestSetOperatorPrecedence(t *testing.T) {
+	tree, err := Parse("select 1 from t union select 2 from s intersect select 3 from u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, ok := tree.(*Union)
+	if !ok {
+		t.Fatalf("expected root union, got %T", tree)
+	}
+	if root.Type != UnionStr {
+		t.Fatalf("root type: %s, want %s", root.Type, UnionStr)
+	}
+	right, ok := root.Right.(*Union)
+	if !ok {
+		t.Fatalf("expected right to be union node, got %T", root.Right)
+	}
+	if right.Type != IntersectStr {
+		t.Fatalf("right type: %s, want %s", right.Type, IntersectStr)
+	}
+
+	tree, err = Parse("select 1 from t except select 2 from s union select 3 from u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, ok = tree.(*Union)
+	if !ok {
+		t.Fatalf("expected root union, got %T", tree)
+	}
+	if root.Type != UnionStr {
+		t.Fatalf("root type: %s, want %s", root.Type, UnionStr)
+	}
+	left, ok := root.Left.(*Union)
+	if !ok {
+		t.Fatalf("expected left to be union node, got %T", root.Left)
+	}
+	if left.Type != ExceptStr {
+		t.Fatalf("left type: %s, want %s", left.Type, ExceptStr)
+	}
+}

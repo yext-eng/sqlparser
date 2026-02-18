@@ -98,6 +98,28 @@ var (
 	}, {
 		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
 	}, {
+		input: "select /* intersect */ 1 from t intersect select 1 from s",
+	}, {
+		input: "select /* intersect all */ 1 from t intersect all select 1 from s",
+	}, {
+		input: "select /* except */ 1 from t except select 1 from s",
+	}, {
+		input: "select /* except distinct */ 1 from t except distinct select 1 from s",
+	}, {
+		input: "select /* except all */ 1 from t except all select 1 from s",
+	}, {
+		input: "select /* union intersect precedence */ 1 from t union select 2 from s intersect select 3 from u",
+	}, {
+		input: "select /* except intersect precedence */ 1 from t except select 2 from s intersect select 3 from u",
+	}, {
+		input: "select /* union parenthesized set expr */ 1 from t union (select 2 from s except select 3 from u)",
+	}, {
+		input:  "select /* except order by limit */ a from t except select a from s order by a limit 2",
+		output: "select /* except order by limit */ a from t except select a from s order by a asc limit 2",
+	}, {
+		input:  "select /* intersect parenthesized rhs */ a from t intersect (select a from s order by a limit 1)",
+		output: "select /* intersect parenthesized rhs */ a from t intersect (select a from s order by a asc limit 1)",
+	}, {
 		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
 		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
 	}, {

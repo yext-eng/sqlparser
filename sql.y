@@ -123,6 +123,9 @@ func isAtSign(tok []byte) bool {
   with          *With
   commonTableExpr *CommonTableExpr
   commonTableExprs CommonTableExprs
+  jsonTableExpr *JSONTableExpr
+  jsonTableColumn JSONTableColumn
+  jsonTableColumns JSONTableColumns
   windows       WindowDefinitions
   window        *WindowDefinition
   windowSpec    *WindowSpec
@@ -178,6 +181,7 @@ func isAtSign(tok []byte) bool {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
+%token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -239,6 +243,9 @@ func isAtSign(tok []byte) bool {
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
+%type <jsonTableExpr> json_table_expr
+%type <jsonTableColumn> json_table_column
+%type <jsonTableColumns> json_table_column_list
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list
 %type <str> inner_join outer_join straight_join natural_join
@@ -1982,6 +1989,10 @@ table_factor:
   {
     $$ = $1
   }
+| json_table_expr as_opt_id
+  {
+    $$ = &AliasedTableExpr{Expr:$1, As: $2}
+  }
 | subquery as_opt table_id
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
@@ -1999,6 +2010,49 @@ table_name as_opt_id index_hint_list
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+  }
+
+json_table_expr:
+  JSON_TABLE openb expression ',' STRING COLUMNS openb json_table_column_list closeb closeb
+  {
+    $$ = &JSONTableExpr{
+      Expr: $3,
+      Path: NewStrVal($5),
+      Columns: $8,
+    }
+  }
+
+json_table_column_list:
+  json_table_column
+  {
+    $$ = JSONTableColumns{$1}
+  }
+| json_table_column_list ',' json_table_column
+  {
+    $$ = append($$, $3)
+  }
+
+json_table_column:
+  // Initial support intentionally omits ON EMPTY / ON ERROR and DEFAULT clauses.
+  sql_id FOR ORDINALITY
+  {
+    $$ = &JSONTableOrdinalityColumn{Name: $1}
+  }
+| sql_id column_type PATH STRING
+  {
+    $$ = &JSONTablePathColumn{Name: $1, Type: $2, Path: NewStrVal($4)}
+  }
+| sql_id column_type EXISTS PATH STRING
+  {
+    $$ = &JSONTablePathColumn{Name: $1, Type: $2, Exists: true, Path: NewStrVal($5)}
+  }
+| NESTED PATH STRING COLUMNS openb json_table_column_list closeb
+  {
+    $$ = &JSONTableNestedPathColumn{Path: NewStrVal($3), Columns: $6}
+  }
+| NESTED STRING COLUMNS openb json_table_column_list closeb
+  {
+    $$ = &JSONTableNestedPathColumn{Path: NewStrVal($2), Columns: $5}
   }
 
 column_list:
@@ -3480,6 +3534,7 @@ non_reserved_keyword:
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
+| COLUMNS
 | CURRENT
 | DATE
 | DATETIME
@@ -3500,6 +3555,7 @@ non_reserved_keyword:
 | INTEGER
 | ISOLATION
 | JSON
+| JSON_TABLE
 | KEY_BLOCK_SIZE
 | KEYS
 | LANGUAGE
@@ -3519,13 +3575,16 @@ non_reserved_keyword:
 | MULTIPOLYGON
 | NAMES
 | NCHAR
+| NESTED
 | NOWAIT
 | NUMERIC
 | OFFSET
 | ONLY
 | OPTION
 | OPTIMIZE
+| ORDINALITY
 | PARTITION
+| PATH
 | POINT
 | POLYGON
 | PRECEDING

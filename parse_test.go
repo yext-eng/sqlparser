@@ -290,6 +290,13 @@ var (
 	}, {
 		input: "select /* select in from */ 1 from (select 1 from t) as a",
 	}, {
+		input: "select /* json_table basic */ jt.id from json_table(doc, '$' columns (id int path '$.id')) as jt",
+	}, {
+		input:  "select /* json_table alias */ * from json_table(payload, '$[*]' columns (rn for ordinality, has_price int exists path '$.price')) jt",
+		output: "select /* json_table alias */ * from json_table(payload, '$[*]' columns (rn for ordinality, has_price int exists path '$.price')) as jt",
+	}, {
+		input: "select /* json_table nested */ * from json_table(doc, '$[*]' columns (id int path '$.id', nested path '$.tags[*]' columns (tag varchar(20) path '$'))) as jt",
+	}, {
 		input:  "select /* select in from with no as */ 1 from (select 1 from t) a",
 		output: "select /* select in from with no as */ 1 from (select 1 from t) as a",
 	}, {
@@ -1463,6 +1470,19 @@ func TestGrantRevokeInvalid(t *testing.T) {
 		"grant select on appdb.users 'app'@'%'",
 		"revoke select on appdb.users to 'app'@'%'",
 		"revoke grant option select on appdb.users from 'app'@'%'",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestJSONTableInvalid(t *testing.T) {
+	invalidSQL := []string{
+		// ON EMPTY / ON ERROR clauses are intentionally unsupported in the initial JSON_TABLE grammar.
+		"select * from json_table(doc, '$' columns (id int path '$.id' null on empty)) as jt",
+		"select * from json_table(doc, '$' columns (id int path '$.id' null on error)) as jt",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

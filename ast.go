@@ -2216,8 +2216,140 @@ type SimpleTableExpr interface {
 	SQLNode
 }
 
-func (TableName) iSimpleTableExpr() {}
-func (*Subquery) iSimpleTableExpr() {}
+func (TableName) iSimpleTableExpr()      {}
+func (*Subquery) iSimpleTableExpr()      {}
+func (*JSONTableExpr) iSimpleTableExpr() {}
+
+// JSONTableExpr represents a JSON_TABLE table-valued function in FROM clauses.
+// Supported column forms are intentionally limited to:
+// - name FOR ORDINALITY
+// - name <type> PATH '<jsonpath>'
+// - name <type> EXISTS PATH '<jsonpath>'
+// - NESTED [PATH] '<jsonpath>' COLUMNS (...)
+type JSONTableExpr struct {
+	Expr    Expr
+	Path    *SQLVal
+	Columns JSONTableColumns
+}
+
+// Format formats the node.
+func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("json_table(%v, %v columns (%v))", node.Expr, node.Path, node.Columns)
+}
+
+func (node *JSONTableExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+		node.Path,
+		node.Columns,
+	)
+}
+
+// JSONTableColumns represents the list of JSON_TABLE column definitions.
+type JSONTableColumns []JSONTableColumn
+
+// Format formats the node.
+func (node JSONTableColumns) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node JSONTableColumns) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// JSONTableColumn represents a JSON_TABLE COLUMNS(...) entry.
+type JSONTableColumn interface {
+	iJSONTableColumn()
+	SQLNode
+}
+
+func (*JSONTableOrdinalityColumn) iJSONTableColumn() {}
+func (*JSONTablePathColumn) iJSONTableColumn()       {}
+func (*JSONTableNestedPathColumn) iJSONTableColumn() {}
+
+// JSONTableOrdinalityColumn represents `name FOR ORDINALITY`.
+type JSONTableOrdinalityColumn struct {
+	Name ColIdent
+}
+
+// Format formats the node.
+func (node *JSONTableOrdinalityColumn) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v for ordinality", node.Name)
+}
+
+func (node *JSONTableOrdinalityColumn) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+	)
+}
+
+// JSONTablePathColumn represents typed PATH and EXISTS PATH columns.
+type JSONTablePathColumn struct {
+	Name   ColIdent
+	Type   ColumnType
+	Exists bool
+	Path   *SQLVal
+}
+
+// Format formats the node.
+func (node *JSONTablePathColumn) Format(buf *TrackedBuffer) {
+	if node.Exists {
+		buf.Myprintf("%v %v exists path %v", node.Name, &node.Type, node.Path)
+		return
+	}
+	buf.Myprintf("%v %v path %v", node.Name, &node.Type, node.Path)
+}
+
+func (node *JSONTablePathColumn) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		&node.Type,
+		node.Path,
+	)
+}
+
+// JSONTableNestedPathColumn represents `NESTED [PATH] ... COLUMNS (...)`.
+type JSONTableNestedPathColumn struct {
+	Path    *SQLVal
+	Columns JSONTableColumns
+}
+
+// Format formats the node.
+func (node *JSONTableNestedPathColumn) Format(buf *TrackedBuffer) {
+	buf.Myprintf("nested path %v columns (%v)", node.Path, node.Columns)
+}
+
+func (node *JSONTableNestedPathColumn) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Path,
+		node.Columns,
+	)
+}
 
 // TableNames is a list of TableName.
 type TableNames []TableName

@@ -315,7 +315,7 @@ func forceEOF(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
-%type <bytes> alter_object_type
+%type <bytes> alter_object_type alter_add_object_type
 
 %start any_command
 
@@ -1312,7 +1312,19 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type force_eof
+| ALTER ignore_opt TABLE table_name ADD constraint_definition force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterConstraint: $6}
+  }
+| ALTER ignore_opt TABLE table_name ADD openb table_column_list closeb force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, TableSpec: $7}
+  }
+| ALTER ignore_opt TABLE table_name ADD CONSTRAINT force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name ADD alter_add_object_type force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1365,6 +1377,18 @@ alter_statement:
 alter_object_type:
   COLUMN
 | CONSTRAINT
+| FOREIGN
+| FULLTEXT
+| ID
+| INDEX
+| KEY
+| PRIMARY
+| SPATIAL
+| PARTITION
+| UNIQUE
+
+alter_add_object_type:
+  COLUMN
 | FOREIGN
 | FULLTEXT
 | ID

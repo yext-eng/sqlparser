@@ -938,21 +938,24 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // IfNotExists is true for CREATE TABLE IF NOT EXISTS statements.
 // LikeTable is set for CREATE TABLE ... LIKE statements.
 // OptSelect is set for CREATE TABLE ... AS SELECT statements.
+// TableSpec is set for CREATE TABLE statements, and ALTER TABLE ... ADD (...) statements.
+// AlterConstraint is set for ALTER TABLE ... ADD [CONSTRAINT name] CHECK (...) statements.
 // VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
 // VindexCols is set for AddColVindexStr
 type DDL struct {
-	Action        string
-	Temporary     bool
-	IfNotExists   bool
-	Table         TableName
-	NewName       TableName
-	IfExists      bool
-	TableSpec     *TableSpec
-	LikeTable     TableName
-	OptSelect     SelectStatement
-	PartitionSpec *PartitionSpec
-	VindexSpec    *VindexSpec
-	VindexCols    []ColIdent
+	Action          string
+	Temporary       bool
+	IfNotExists     bool
+	Table           TableName
+	NewName         TableName
+	IfExists        bool
+	TableSpec       *TableSpec
+	LikeTable       TableName
+	OptSelect       SelectStatement
+	PartitionSpec   *PartitionSpec
+	AlterConstraint *ConstraintDefinition
+	VindexSpec      *VindexSpec
+	VindexCols      []ColIdent
 }
 
 // DDL strings.
@@ -1003,6 +1006,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case AlterStr:
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+		} else if node.TableSpec != nil {
+			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec)
+		} else if node.AlterConstraint != nil {
+			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.AlterConstraint)
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
@@ -1038,6 +1045,8 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		node.NewName,
 		node.LikeTable,
 		node.OptSelect,
+		node.TableSpec,
+		node.AlterConstraint,
 	)
 }
 

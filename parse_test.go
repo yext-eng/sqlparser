@@ -872,6 +872,19 @@ var (
 		input:  "alter table a add spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add check (id > 0)",
+		output: "alter table a add check (id > 0)",
+	}, {
+		input:  "alter table a add constraint id_positive check (id > 0)",
+		output: "alter table a add constraint id_positive check (id > 0)",
+	}, {
+		input: "alter table a add (id2 int, key by_id2 (id2), constraint id2_positive check (id2 > 0))",
+		output: "alter table a add (\n" +
+			"\tid2 int,\n" +
+			"\tkey by_id2 (id2),\n" +
+			"\tconstraint id2_positive check (id2 > 0)\n" +
+			")",
+	}, {
 		input:  "alter table a add foreign key",
 		output: "alter table a",
 	}, {

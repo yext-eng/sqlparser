@@ -950,21 +950,21 @@ var (
 		output: "create table a as select 1 from dual",
 	}, {
 		input:  "create table if not exists a as select 1",
-		output: "create table a as select 1 from dual",
+		output: "create table if not exists a as select 1 from dual",
 	}, {
 		input:  "create temporary table if not exists a as select 1",
-		output: "create temporary table a as select 1 from dual",
+		output: "create temporary table if not exists a as select 1 from dual",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
 		input:  "create temporary table if not exists a (\n\t`a` int\n)",
-		output: "create temporary table a (\n\ta int\n)",
+		output: "create temporary table if not exists a (\n\ta int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
-		output: "create table a (\n\ta int\n)",
+		output: "create table if not exists a (\n\ta int\n)",
 	}, {
 		input:  "create table a ignore me this is garbage",
 		output: "create table a",
@@ -1736,6 +1736,10 @@ func TestSubStr(t *testing.T) {
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 		"create table t as select 1 from dual",
+		"create table t like src",
+		"create table if not exists t like src",
+		"create temporary table t like src",
+		"create temporary table if not exists t like src",
 
 		// test all the data types and options
 		"create table t (\n" +
@@ -1967,6 +1971,9 @@ func TestCreateTable(t *testing.T) {
 			"	unique key by_username2 (username) key_block_size 8,\n" +
 			"	unique by_username3 (username) key_block_size 4\n" +
 			")",
+	}, {
+		input:  "CREATE TEMPORARY TABLE IF NOT EXISTS t LIKE src",
+		output: "create temporary table if not exists t like src",
 	},
 	}
 	for _, tcase := range testCases {

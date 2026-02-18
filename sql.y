@@ -271,8 +271,8 @@ func forceEOF(yylex interface{}) {
 %type <str> ignore_opt default_opt
 %type <str> extended_opt full_opt from_database_opt tables_or_processlist
 %type <showFilter> like_or_where_opt
-%type <byt> exists_opt
-%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <byt> exists_opt not_exists_opt
+%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <with> with_opt with_clause
@@ -622,6 +622,11 @@ create_statement:
     $1.TableSpec = $2
     $$ = $1
   }
+| create_table_prefix LIKE table_name
+  {
+    $1.LikeTable = $3
+    $$ = $1
+  }
 | create_table_prefix AS select_statement
   {
     $1.OptSelect = $3
@@ -702,12 +707,12 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateStr, NewName: $4}
+    $$ = &DDL{Action: CreateStr, IfNotExists: $3 == 1, NewName: $4}
     setDDL(yylex, $$)
   }
 | CREATE TEMPORARY TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateStr, Temporary: true, NewName: $5}
+    $$ = &DDL{Action: CreateStr, Temporary: true, IfNotExists: $4 == 1, NewName: $5}
     setDDL(yylex, $$)
   }
 
@@ -3054,9 +3059,9 @@ exists_opt:
   { $$ = 1 }
 
 not_exists_opt:
-  { $$ = struct{}{} }
+  { $$ = 0 }
 | IF NOT EXISTS
-  { $$ = struct{}{} }
+  { $$ = 1 }
 
 ignore_opt:
   { $$ = "" }

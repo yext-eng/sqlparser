@@ -935,16 +935,20 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // Table is set for AlterStr, DropStr, RenameStr, TruncateStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
 // Temporary is true for CREATE TEMPORARY TABLE statements.
+// IfNotExists is true for CREATE TABLE IF NOT EXISTS statements.
+// LikeTable is set for CREATE TABLE ... LIKE statements.
 // OptSelect is set for CREATE TABLE ... AS SELECT statements.
 // VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
 // VindexCols is set for AddColVindexStr
 type DDL struct {
 	Action        string
 	Temporary     bool
+	IfNotExists   bool
 	Table         TableName
 	NewName       TableName
 	IfExists      bool
 	TableSpec     *TableSpec
+	LikeTable     TableName
 	OptSelect     SelectStatement
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
@@ -974,12 +978,19 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.Temporary {
 			temporary = "temporary "
 		}
-		if node.TableSpec == nil && node.OptSelect == nil {
-			buf.Myprintf("%s %stable %v", node.Action, temporary, node.NewName)
-		} else if node.TableSpec != nil {
-			buf.Myprintf("%s %stable %v %v", node.Action, temporary, node.NewName, node.TableSpec)
-		} else {
-			buf.Myprintf("%s %stable %v as %v", node.Action, temporary, node.NewName, node.OptSelect)
+		notExists := ""
+		if node.IfNotExists {
+			notExists = "if not exists "
+		}
+		switch {
+		case node.TableSpec != nil:
+			buf.Myprintf("%s %stable %s%v %v", node.Action, temporary, notExists, node.NewName, node.TableSpec)
+		case !node.LikeTable.IsEmpty():
+			buf.Myprintf("%s %stable %s%v like %v", node.Action, temporary, notExists, node.NewName, node.LikeTable)
+		case node.OptSelect != nil:
+			buf.Myprintf("%s %stable %s%v as %v", node.Action, temporary, notExists, node.NewName, node.OptSelect)
+		default:
+			buf.Myprintf("%s %stable %s%v", node.Action, temporary, notExists, node.NewName)
 		}
 	case DropStr:
 		exists := ""
@@ -1025,6 +1036,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		visit,
 		node.Table,
 		node.NewName,
+		node.LikeTable,
 		node.OptSelect,
 	)
 }

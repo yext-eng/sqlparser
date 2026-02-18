@@ -110,6 +110,9 @@ func forceEOF(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
+  with          *With
+  commonTableExpr *CommonTableExpr
+  commonTableExprs CommonTableExprs
 }
 
 %token LEX_ERROR
@@ -190,13 +193,13 @@ func forceEOF(yylex interface{}) {
 %token <bytes> GROUP_CONCAT SEPARATOR
 
 // Match
-%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
+%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH RECURSIVE QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <bytes> UNUSED
 
 %type <statement> command
-%type <selStmt> select_statement base_select union_lhs union_rhs
+%type <selStmt> select_statement select_statement_no_with base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
 %type <ddl> create_table_prefix
@@ -204,6 +207,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
+%type <str> recursive_opt
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -258,6 +262,10 @@ func forceEOF(yylex interface{}) {
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
+%type <with> with_opt with_clause
+%type <columns> common_table_expr_columns_opt
+%type <commonTableExpr> common_table_expr
+%type <commonTableExprs> common_table_expr_list
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
@@ -331,6 +339,22 @@ command:
 | other_statement
 
 select_statement:
+  select_statement_no_with
+  {
+    $$ = $1
+  }
+| with_clause select_statement_no_with
+  {
+    switch stmt := $2.(type) {
+    case *Select:
+      stmt.With = $1
+    case *Union:
+      stmt.With = $1
+    }
+    $$ = $2
+  }
+
+select_statement_no_with:
   base_select order_by_opt limit_opt lock_opt
   {
     sel := $1.(*Select)
@@ -346,6 +370,55 @@ select_statement:
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+  }
+
+with_opt:
+  {
+    $$ = nil
+  }
+| with_clause
+  {
+    $$ = $1
+  }
+
+with_clause:
+  WITH recursive_opt common_table_expr_list
+  {
+    $$ = &With{Recursive: $2 != "", Ctes: $3}
+  }
+
+recursive_opt:
+  {
+    $$ = ""
+  }
+| RECURSIVE
+  {
+    $$ = string($1)
+  }
+
+common_table_expr_list:
+  common_table_expr
+  {
+    $$ = CommonTableExprs{$1}
+  }
+| common_table_expr_list ',' common_table_expr
+  {
+    $$ = append($1, $3)
+  }
+
+common_table_expr:
+  table_id common_table_expr_columns_opt AS subquery
+  {
+    $$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
+  }
+
+common_table_expr_columns_opt:
+  {
+    $$ = nil
+  }
+| openb column_list closeb
+  {
+    $$ = $2
   }
 
 stream_statement:
@@ -383,27 +456,28 @@ union_rhs:
 
 
 insert_statement:
-  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
+  with_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
-    ins := $6
-    ins.Action = $1
-    ins.Comments = $2
-    ins.Ignore = $3
-    ins.Table = $4
-    ins.Partitions = $5
-    ins.OnDup = OnDup($7)
+    ins := $7
+    ins.With = $1
+    ins.Action = $2
+    ins.Comments = $3
+    ins.Ignore = $4
+    ins.Table = $5
+    ins.Partitions = $6
+    ins.OnDup = OnDup($8)
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
+| with_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
   {
-    cols := make(Columns, 0, len($7))
-    vals := make(ValTuple, 0, len($8))
-    for _, updateList := range $7 {
+    cols := make(Columns, 0, len($8))
+    vals := make(ValTuple, 0, len($9))
+    for _, updateList := range $8 {
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{With: $1, Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: Values{vals}, OnDup: OnDup($9)}
   }
 
 insert_or_replace:
@@ -417,23 +491,23 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
+  with_opt UPDATE comment_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), TableExprs: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{With: $1, Comments: Comments($3), TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
   }
 
 delete_statement:
-  DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  with_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Delete{With: $1, Comments: Comments($3), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
   }
-| DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
+| with_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Targets: $5, TableExprs: $7, Where: NewWhere(WhereStr, $8)}
   }
-| DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
+| with_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7)}
   }
 
 from_or_using:
@@ -3090,6 +3164,7 @@ non_reserved_keyword:
 | PROCEDURE
 | QUERY
 | READ
+| RECURSIVE
 | REAL
 | REORGANIZE
 | REPAIR

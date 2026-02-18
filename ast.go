@@ -243,8 +243,80 @@ func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 
+// With represents a WITH clause.
+type With struct {
+	Recursive bool
+	Ctes      CommonTableExprs
+}
+
+// Format formats the node.
+func (node *With) Format(buf *TrackedBuffer) {
+	if node.Recursive {
+		buf.Myprintf("with recursive %v", node.Ctes)
+		return
+	}
+	buf.Myprintf("with %v", node.Ctes)
+}
+
+func (node *With) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Ctes)
+}
+
+// CommonTableExprs is a list of common table expressions.
+type CommonTableExprs []*CommonTableExpr
+
+// Format formats the node.
+func (node CommonTableExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node CommonTableExprs) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CommonTableExpr represents one common table expression.
+type CommonTableExpr struct {
+	ID       TableIdent
+	Columns  Columns
+	Subquery *Subquery
+}
+
+// Format formats the node.
+func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v", node.ID)
+	if len(node.Columns) != 0 {
+		buf.Myprintf("%v", node.Columns)
+	}
+	buf.Myprintf(" as %v", node.Subquery)
+}
+
+func (node *CommonTableExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.ID,
+		node.Columns,
+		node.Subquery,
+	)
+}
+
 // Select represents a SELECT statement.
 type Select struct {
+	With        *With
 	Cache       string
 	Comments    Comments
 	Distinct    string
@@ -289,6 +361,9 @@ func (node *Select) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.Myprintf("%v ", node.With)
+	}
 	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
@@ -302,6 +377,7 @@ func (node *Select) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.With,
 		node.Comments,
 		node.SelectExprs,
 		node.From,
@@ -391,6 +467,7 @@ func (node *ParenSelect) walkSubtree(visit Visit) error {
 
 // Union represents a UNION statement.
 type Union struct {
+	With        *With
 	Type        string
 	Left, Right SelectStatement
 	OrderBy     OrderBy
@@ -417,6 +494,9 @@ func (node *Union) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.Myprintf("%v ", node.With)
+	}
 	buf.Myprintf("%v %s %v%v%v%s", node.Left, node.Type, node.Right,
 		node.OrderBy, node.Limit, node.Lock)
 }
@@ -427,6 +507,7 @@ func (node *Union) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.With,
 		node.Left,
 		node.Right,
 	)
@@ -466,6 +547,7 @@ func (node *Stream) walkSubtree(visit Visit) error {
 // of the implications the deletion part may have on vindexes.
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Insert struct {
+	With       *With
 	Action     string
 	Comments   Comments
 	Ignore     string
@@ -484,6 +566,9 @@ const (
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.Myprintf("%v ", node.With)
+	}
 	buf.Myprintf("%s %v%sinto %v%v%v %v%v",
 		node.Action,
 		node.Comments, node.Ignore,
@@ -496,6 +581,7 @@ func (node *Insert) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.With,
 		node.Comments,
 		node.Table,
 		node.Columns,
@@ -518,6 +604,7 @@ func (*ParenSelect) iInsertRows() {}
 // Update represents an UPDATE statement.
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Update struct {
+	With       *With
 	Comments   Comments
 	TableExprs TableExprs
 	Exprs      UpdateExprs
@@ -528,6 +615,9 @@ type Update struct {
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.Myprintf("%v ", node.With)
+	}
 	buf.Myprintf("update %v%v set %v%v%v%v",
 		node.Comments, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
@@ -539,6 +629,7 @@ func (node *Update) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.With,
 		node.Comments,
 		node.TableExprs,
 		node.Exprs,
@@ -551,6 +642,7 @@ func (node *Update) walkSubtree(visit Visit) error {
 // Delete represents a DELETE statement.
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Delete struct {
+	With       *With
 	Comments   Comments
 	Targets    TableNames
 	TableExprs TableExprs
@@ -562,6 +654,9 @@ type Delete struct {
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.Myprintf("%v ", node.With)
+	}
 	buf.Myprintf("delete %v", node.Comments)
 	if node.Targets != nil {
 		buf.Myprintf("%v ", node.Targets)
@@ -575,6 +670,7 @@ func (node *Delete) walkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.With,
 		node.Comments,
 		node.Targets,
 		node.TableExprs,

@@ -125,6 +125,15 @@ var (
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
+		input:  "with cte as (select 1) select * from cte",
+		output: "with cte as (select 1 from dual) select * from cte",
+	}, {
+		input:  "with recursive cte(n) as (select 1 union all select n + 1 from cte where n < 5) select n from cte",
+		output: "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte",
+	}, {
+		input:  "with a as (select 1), b as (select * from a) select * from b",
+		output: "with a as (select 1 from dual), b as (select * from a) select * from b",
+	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
@@ -620,6 +629,9 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
+		input:  "with c as (select 1) insert into t select * from c",
+		output: "with c as (select 1 from dual) insert into t select * from c",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -656,6 +668,9 @@ var (
 		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
 		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
 	}, {
+		input:  "with c as (select 1 as id from dual) update t set a = 1 where id in (select id from c)",
+		output: "with c as (select 1 as id from dual) update t set a = 1 where id in (select id from c)",
+	}, {
 		input: "delete /* simple */ from a",
 	}, {
 		input: "delete /* a.b */ from a.b",
@@ -672,6 +687,9 @@ var (
 	}, {
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
+	}, {
+		input:  "with c as (select 1 as id from dual) delete from t where id in (select id from c)",
+		output: "with c as (select 1 as id from dual) delete from t where id in (select id from c)",
 	}, {
 		input: "set /* simple */ a = 3",
 	}, {
@@ -1337,6 +1355,19 @@ func TestValid(t *testing.T) {
 		Walk(func(node SQLNode) (bool, error) {
 			return true, nil
 		}, tree)
+	}
+}
+
+func TestCTEInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"with cte as select 1 select * from cte",
+		"with recursive select 1",
+		"with cte as (select 1) with d as (select 2) select * from cte",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
 	}
 }
 

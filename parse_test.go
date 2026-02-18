@@ -934,6 +934,15 @@ var (
 	}, {
 		input: "create temporary table a",
 	}, {
+		input: "create table a as select 1",
+		output: "create table a as select 1 from dual",
+	}, {
+		input: "create table if not exists a as select 1",
+		output: "create table a as select 1 from dual",
+	}, {
+		input: "create temporary table if not exists a as select 1",
+		output: "create temporary table a as select 1 from dual",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
@@ -1699,6 +1708,8 @@ func TestSubStr(t *testing.T) {
 
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
+		"create table t as select 1 from dual",
+
 		// test all the data types and options
 		"create table t (\n" +
 			"	col_bit bit,\n" +

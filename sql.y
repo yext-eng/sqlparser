@@ -609,6 +609,11 @@ create_statement:
     $1.TableSpec = $2
     $$ = $1
   }
+| create_table_prefix AS select_statement
+  {
+    $1.OptSelect = $3
+    $$ = $1
+  }
 | CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement

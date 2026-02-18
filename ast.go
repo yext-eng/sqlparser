@@ -745,6 +745,7 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // Table is set for AlterStr, DropStr, RenameStr, TruncateStr
 // NewName is set for AlterStr, CreateStr, RenameStr.
 // Temporary is true for CREATE TEMPORARY TABLE statements.
+// OptSelect is set for CREATE TABLE ... AS SELECT statements.
 // VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
 // VindexCols is set for AddColVindexStr
 type DDL struct {
@@ -754,6 +755,7 @@ type DDL struct {
 	NewName       TableName
 	IfExists      bool
 	TableSpec     *TableSpec
+	OptSelect     SelectStatement
 	PartitionSpec *PartitionSpec
 	VindexSpec    *VindexSpec
 	VindexCols    []ColIdent
@@ -782,10 +784,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.Temporary {
 			temporary = "temporary "
 		}
-		if node.TableSpec == nil {
+		if node.TableSpec == nil && node.OptSelect == nil {
 			buf.Myprintf("%s %stable %v", node.Action, temporary, node.NewName)
-		} else {
+		} else if node.TableSpec != nil {
 			buf.Myprintf("%s %stable %v %v", node.Action, temporary, node.NewName, node.TableSpec)
+		} else {
+			buf.Myprintf("%s %stable %v as %v", node.Action, temporary, node.NewName, node.OptSelect)
 		}
 	case DropStr:
 		exists := ""
@@ -831,6 +835,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		visit,
 		node.Table,
 		node.NewName,
+		node.OptSelect,
 	)
 }
 

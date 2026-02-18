@@ -2782,6 +2782,8 @@ const (
 	NotLikeStr           = "not like"
 	RegexpStr            = "regexp"
 	NotRegexpStr         = "not regexp"
+	MemberOfStr          = "member of"
+	NotMemberOfStr       = "not member of"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
 )

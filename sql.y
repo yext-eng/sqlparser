@@ -145,7 +145,7 @@ func isAtSign(tok []byte) bool {
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
-%token <bytes> NULL TRUE FALSE
+%token <bytes> NULL TRUE FALSE OF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -155,7 +155,7 @@ func isAtSign(tok []byte) bool {
 %left <bytes> AND
 %right <bytes> NOT '!'
 %left <bytes> BETWEEN CASE WHEN THEN ELSE END
-%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP MEMBER IN
 %left <bytes> '|'
 %left <bytes> '&'
 %left <bytes> SHIFT_LEFT SHIFT_RIGHT
@@ -2320,6 +2320,14 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpStr, Right: $4}
   }
+| value_expression MEMBER OF openb expression closeb
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: MemberOfStr, Right: &ParenExpr{Expr: $5}}
+  }
+| value_expression NOT MEMBER OF openb expression closeb
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: NotMemberOfStr, Right: &ParenExpr{Expr: $6}}
+  }
 | value_expression BETWEEN value_expression AND value_expression
   {
     $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
@@ -3474,11 +3482,13 @@ reserved_keyword:
 | LOCK
 | MATCH
 | MAXVALUE
+| MEMBER
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
 | NULL
+| OF
 | ON
 | OR
 | ORDER

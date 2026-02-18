@@ -354,6 +354,21 @@ var (
 		input:  "select /* not rlike */ 1 from t where a not rlike b",
 		output: "select /* not rlike */ 1 from t where a not regexp b",
 	}, {
+		input: "select /* member of */ 1 from t where a member of (b)",
+	}, {
+		input:  "select /* member of uppercase */ 1 from t where a MEMBER OF (b)",
+		output: "select /* member of uppercase */ 1 from t where a member of (b)",
+	}, {
+		input: "select /* not member of */ 1 from t where a not member of (b)",
+	}, {
+		input: "select /* regexp_like */ regexp_like(a, 'b+') from t",
+	}, {
+		input: "select /* regexp_instr */ regexp_instr(a, 'b+') from t",
+	}, {
+		input: "select /* regexp_substr */ regexp_substr(a, 'b+') from t",
+	}, {
+		input: "select /* regexp_replace */ regexp_replace(a, 'b+', 'c') from t",
+	}, {
 		input: "select /* between */ 1 from t where a between b and c",
 	}, {
 		input: "select /* not between */ 1 from t where a not between b and c",

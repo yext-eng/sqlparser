@@ -682,7 +682,7 @@ create_statement:
     $1.OptSelect = $3
     $$ = $1
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
+| CREATE constraint_opt INDEX sql_id using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
@@ -743,7 +743,7 @@ table_column_list:
   }
 
 column_definition:
-  ID column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -751,15 +751,15 @@ column_definition:
     $2.Autoincrement = $6
     $2.KeyOpt = $7
     $2.Comment = $8
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| ID column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
+| sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
   {
     $2.GeneratedExpr = $7
     $2.GeneratedStorage = $9
     $2.KeyOpt = $10
     $2.Comment = $11
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 column_type:
   numeric_type unsigned_opt zero_fill_opt
@@ -1228,17 +1228,17 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| SPATIAL index_or_key ID
+| SPATIAL index_or_key sql_id
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Spatial: true, Unique: false}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Spatial: true, Unique: false}
   }
 | UNIQUE index_or_key index_name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Unique: true}
   }
-| UNIQUE ID
+| UNIQUE sql_id
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: true}
+    $$ = &IndexInfo{Type: string($1), Name: $2, Unique: true}
   }
 | index_or_key index_name_opt
   {
@@ -1266,9 +1266,9 @@ index_or_key:
   }
 
 index_name_opt:
-  ID
+  sql_id
   {
-    $$ = NewColIdent(string($1))
+    $$ = $1
   }
 | /* empty */
   {
@@ -1448,7 +1448,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_name ddl_force_eof
+| DROP INDEX sql_id ON table_name ddl_force_eof
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}

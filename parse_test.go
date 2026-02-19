@@ -2127,6 +2127,29 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "CREATE TEMPORARY TABLE IF NOT EXISTS t LIKE src",
 		output: "create temporary table if not exists t like src",
+	}, {
+		input: "create table t (\n" +
+			"	status int,\n" +
+			"	variables int,\n" +
+			"	offset int,\n" +
+			"	view int,\n" +
+			"	date int,\n" +
+			"	unique key status (status),\n" +
+			"	unique variables (variables),\n" +
+			"	index offset (offset),\n" +
+			"	key view (view)\n" +
+			")",
+		output: "create table t (\n" +
+			"\t`status` int,\n" +
+			"\t`variables` int,\n" +
+			"\t`offset` int,\n" +
+			"\t`view` int,\n" +
+			"\t`date` int,\n" +
+			"\tunique key `status` (`status`),\n" +
+			"\tunique `variables` (`variables`),\n" +
+			"\tindex `offset` (`offset`),\n" +
+			"\tkey `view` (`view`)\n" +
+			")",
 	},
 	}
 	for _, tcase := range testCases {
@@ -2137,6 +2160,16 @@ func TestCreateTable(t *testing.T) {
 		}
 		if got, want := String(tree.(*DDL)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
+	}
+
+	keywordIndexDDLs := []string{
+		"create index status using btree on t (id)",
+		"drop index status on t",
+	}
+	for _, sql := range keywordIndexDDLs {
+		if _, err := ParseStrictDDL(sql); err != nil {
+			t.Errorf("input: %s, err: %v", sql, err)
 		}
 	}
 }

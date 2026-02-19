@@ -1360,6 +1360,15 @@ var (
 		input:  "create database if not exists test_db",
 		output: "create database test_db",
 	}, {
+		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */",
+		output: "create database test_db",
+	}, {
+		input:  "CREATE DATABASE `test_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+		output: "create database test_db",
+	}, {
+		input:  "CREATE SCHEMA /*!32312 IF NOT EXISTS*/ `test_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */",
+		output: "create database test_db",
+	}, {
 		input: "drop database test_db",
 	}, {
 		input:  "drop schema test_db",
@@ -2112,6 +2121,34 @@ func TestCreateTable(t *testing.T) {
 
 		if sql != got {
 			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
+		}
+	}
+
+	strictMySQLCommentDBDDL := []struct {
+		input  string
+		output string
+	}{
+		{
+			input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */",
+			output: "create database test_db",
+		},
+		{
+			input:  "CREATE DATABASE `test_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+			output: "create database test_db",
+		},
+		{
+			input:  "CREATE SCHEMA /*!32312 IF NOT EXISTS*/ `test_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */",
+			output: "create database test_db",
+		},
+	}
+	for _, tcase := range strictMySQLCommentDBDDL {
+		tree, err := ParseStrictDDL(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		if got := String(tree); got != tcase.output {
+			t.Errorf("ParseStrictDDL(%s):\n%s, want\n%s", tcase.input, got, tcase.output)
 		}
 	}
 

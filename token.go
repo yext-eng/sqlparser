@@ -467,6 +467,16 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
+	if tkn.ForceEOF {
+		// ForceEOF is used by grammar productions like ddl_force_eof to intentionally
+		// stop tokenization after a supported DDL prefix. This must run before
+		// specialComment scanning; otherwise tokens buffered from /*! ... */ can leak
+		// past EOF forcing and cause strict-DDL parse failures.
+		tkn.specialComment = nil
+		tkn.skipStatement()
+		return 0, nil
+	}
+
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
@@ -481,11 +491,6 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	}
 	if tkn.lastChar == 0 {
 		tkn.next()
-	}
-
-	if tkn.ForceEOF {
-		tkn.skipStatement()
-		return 0, nil
 	}
 
 	tkn.skipBlank()

@@ -189,3 +189,55 @@ func TestSplitStatement(t *testing.T) {
 		}
 	}
 }
+
+func TestScanForceEOFSkipsSpecialComment(t *testing.T) {
+	tkn := NewStringTokenizer("ignored")
+	tkn.ForceEOF = true
+	tkn.specialComment = NewStringTokenizer("character set utf8mb4")
+
+	id, out := tkn.Scan()
+	if id != 0 || out != nil {
+		t.Fatalf("Scan() = (%d, %q), want (0, nil)", id, out)
+	}
+	if tkn.specialComment != nil {
+		t.Fatalf("expected specialComment to be cleared when forcing EOF")
+	}
+}
+
+func TestScanMySQLSpecificCommentExpandsTokens(t *testing.T) {
+	tkn := NewStringTokenizer("select /*!40101 * from*/ t")
+
+	id, out := tkn.Scan()
+	if id != SELECT || string(out) != "select" {
+		t.Fatalf("first token = (%d, %q), want (%d, %q)", id, out, SELECT, "select")
+	}
+
+	id, out = tkn.Scan()
+	if id != '*' || out != nil {
+		t.Fatalf("second token = (%d, %q), want (%d, nil)", id, out, '*')
+	}
+
+	id, out = tkn.Scan()
+	if id != FROM || string(out) != "from" {
+		t.Fatalf("third token = (%d, %q), want (%d, %q)", id, out, FROM, "from")
+	}
+
+	id, out = tkn.Scan()
+	if id != ID || string(out) != "t" {
+		t.Fatalf("fourth token = (%d, %q), want (%d, %q)", id, out, ID, "t")
+	}
+
+	id, out = tkn.Scan()
+	if id != 0 || out != nil {
+		t.Fatalf("final token = (%d, %q), want (0, nil)", id, out)
+	}
+}
+
+func TestScanMalformedMySQLSpecificComment(t *testing.T) {
+	tkn := NewStringTokenizer("/*!40101 select")
+
+	id, out := tkn.Scan()
+	if id != LEX_ERROR {
+		t.Fatalf("Scan() token = (%d, %q), want LEX_ERROR", id, out)
+	}
+}

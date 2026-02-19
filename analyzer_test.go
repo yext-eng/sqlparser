@@ -407,16 +407,19 @@ func TestExtractSetValues(t *testing.T) {
 		out: map[SetKey]interface{}{{Key: "autocommit", Scope: "session"}: int64(1)},
 	}, {
 		sql: "set @@session.'autocommit'=1",
-		out: map[SetKey]interface{}{{Key: "autocommit", Scope: "session"}: int64(1)},
+		out: nil,
+		err: "syntax error at position 27 near 'autocommit'",
 	}, {
 		sql: "set @@session.\"autocommit\"=1",
 		out: map[SetKey]interface{}{{Key: "autocommit", Scope: "session"}: int64(1)},
 	}, {
 		sql: "set @@session.'\"autocommit'=1",
-		out: map[SetKey]interface{}{{Key: "\"autocommit", Scope: "session"}: int64(1)},
+		out: nil,
+		err: "syntax error at position 28 near '\"autocommit'",
 	}, {
 		sql: "set @@session.`autocommit'`=1",
-		out: map[SetKey]interface{}{{Key: "autocommit'", Scope: "session"}: int64(1)},
+		out: nil,
+		err: "syntax error at position 30 near '`=1'",
 	}, {
 		sql: "set AUTOCOMMIT=1",
 		out: map[SetKey]interface{}{{Key: "autocommit", Scope: "session"}: int64(1)},
@@ -463,13 +466,13 @@ func TestExtractSetValues(t *testing.T) {
 		out:   map[SetKey]interface{}{{Key: "tx_isolation", Scope: "session"}: "serializable"},
 		scope: "session",
 	}, {
-		sql:   "set session tx_read_only = 0",
-		out:   map[SetKey]interface{}{{Key: "tx_read_only", Scope: "session"}: int64(0)},
-		scope: "session",
+		sql: "set session tx_read_only = 0",
+		out: nil,
+		err: "deprecated system variable in set statement at position 29",
 	}, {
-		sql:   "set session tx_read_only = 1",
-		out:   map[SetKey]interface{}{{Key: "tx_read_only", Scope: "session"}: int64(1)},
-		scope: "session",
+		sql: "set session tx_read_only = 1",
+		out: nil,
+		err: "deprecated system variable in set statement at position 29",
 	}, {
 		sql:   "set session sql_safe_updates = 0",
 		out:   map[SetKey]interface{}{{Key: "sql_safe_updates", Scope: "session"}: int64(0)},

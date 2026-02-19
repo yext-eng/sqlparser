@@ -270,7 +270,6 @@ var keywords = map[string]int{
 	"natural":             NATURAL,
 	"nchar":               NCHAR,
 	"nested":              NESTED,
-	"next":                NEXT,
 	"nowait":              NOWAIT,
 	"not":                 NOT,
 	"no_write_to_binlog":  UNUSED,
@@ -358,7 +357,6 @@ var keywords = map[string]int{
 	"status":              STATUS,
 	"stored":              STORED,
 	"straight_join":       STRAIGHT_JOIN,
-	"stream":              STREAM,
 	"table":               TABLE,
 	"tables":              TABLES,
 	"temporary":           TEMPORARY,
@@ -399,12 +397,7 @@ var keywords = map[string]int{
 	"varying":             UNUSED,
 	"virtual":             VIRTUAL,
 	"vindex":              VINDEX,
-	"vindexes":            VINDEXES,
 	"view":                VIEW,
-	"vitess_keyspaces":    VITESS_KEYSPACES,
-	"vitess_shards":       VITESS_SHARDS,
-	"vitess_tablets":      VITESS_TABLETS,
-	"vschema_tables":      VSCHEMA_TABLES,
 	"window":              WINDOW,
 	"when":                WHEN,
 	"where":               WHERE,
@@ -721,21 +714,20 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
-	token := VALUE_ARG
 	tkn.next()
-	if tkn.lastChar == ':' {
-		token = LIST_ARG
-		buffer.WriteByte(byte(tkn.lastChar))
-		tkn.next()
-	}
-	if !isLetter(tkn.lastChar) {
+	if tkn.lastChar != 'v' && tkn.lastChar != 'V' {
 		return LEX_ERROR, buffer.Bytes()
 	}
-	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.' {
+	buffer.WriteByte(byte(tkn.lastChar))
+	tkn.next()
+	if !isDigit(tkn.lastChar) {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	for isDigit(tkn.lastChar) {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
-	return token, buffer.Bytes()
+	return VALUE_ARG, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes2.Buffer) {
@@ -953,7 +945,7 @@ func isLetter(ch uint16) bool {
 }
 
 func isCarat(ch uint16) bool {
-	return ch == '.' || ch == '\'' || ch == '"' || ch == '`'
+	return ch == '.' || ch == '"' || ch == '`'
 }
 
 func digitVal(ch uint16) int {

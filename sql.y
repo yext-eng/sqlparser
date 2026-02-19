@@ -52,6 +52,27 @@ func isAtSign(tok []byte) bool {
   return len(tok) == 1 && tok[0] == '@'
 }
 
+func rejectDeprecatedSetVar(yylex interface{}, name ColIdent) bool {
+  lowered := name.Lowered()
+  if lowered == "tx_isolation" || lowered == "tx_read_only" {
+    yylex.(*Tokenizer).Error("deprecated system variable in set statement")
+    return true
+  }
+  return false
+}
+
+func isAllowedGenericShowType(id []byte) bool {
+  switch NewColIdent(string(id)).Lowered() {
+  case "binlog", "collation", "engine", "engines", "errors", "events",
+    "function", "grants", "indexes", "master", "open", "plugins",
+    "privileges", "profile", "profiles", "relaylog", "slave", "storage",
+    "triggers", "warnings":
+    return true
+  default:
+    return false
+  }
+}
+
 %}
 
 %union {
@@ -112,8 +133,6 @@ func isAtSign(tok []byte) bool {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   privilege     Privilege
   privileges    Privileges
@@ -137,15 +156,15 @@ func isAtSign(tok []byte) bool {
 %token LEX_ERROR
 %left <bytes> UNION EXCEPT
 %left <bytes> INTERSECT
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
-%token <bytes> NEXT VALUE SHARE MODE NOWAIT SKIP LOCKED
+%token <bytes> VALUE SHARE MODE NOWAIT SKIP LOCKED
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -179,7 +198,7 @@ func isAtSign(tok []byte) bool {
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX VINDEXES
+%token <bytes> VINDEX
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
 %token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
@@ -200,7 +219,7 @@ func isAtSign(tok []byte) bool {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL GENERATED ALWAYS STORED VIRTUAL
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA_TABLES EXTENDED FULL PROCESSLIST
+%token <bytes> DATABASES TABLES EXTENDED FULL PROCESSLIST
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -223,7 +242,7 @@ func isAtSign(tok []byte) bool {
 
 %type <statement> command
 %type <selStmt> select_statement select_statement_no_with base_select union_lhs union_rhs intersect_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> values_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement
 %type <ddl> create_table_prefix
@@ -259,7 +278,7 @@ func isAtSign(tok []byte) bool {
 %type <boolVal> boolean_value
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val
+%type <expr> value value_expression
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <str> is_suffix
 %type <colTuple> col_tuple
@@ -295,7 +314,6 @@ func isAtSign(tok []byte) bool {
 %type <bytes> charset_or_character_set
 %type <updateExpr> update_expression
 %type <setExpr> set_expression transaction_char isolation_level
-%type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> extended_opt full_opt from_database_opt tables_or_processlist
 %type <showFilter> like_or_where_opt
@@ -339,9 +357,6 @@ func isAtSign(tok []byte) bool {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
-%type <vindexParam> vindex_param
-%type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> vindex_type vindex_type_opt
 %type <bytes> alter_object_type alter_add_object_type
 
 %start any_command
@@ -363,7 +378,6 @@ command:
   {
     $$ = $1
   }
-| stream_statement
 | insert_statement
 | values_statement
 | update_statement
@@ -417,10 +431,6 @@ select_statement_no_with:
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
   }
-| SELECT comment_opt cache_opt NEXT num_val for_from table_name
-  {
-    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
-  }
 
 with_opt:
   {
@@ -469,12 +479,6 @@ common_table_expr_columns_opt:
 | openb column_list closeb
   {
     $$ = $2
-  }
-
-stream_statement:
-  STREAM comment_opt select_expression FROM table_name
-  {
-    $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
   }
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
@@ -680,21 +684,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
   }
-| CREATE VIEW table_name ddl_force_eof
+| CREATE VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
+    $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName(), OptSelect: $5}
   }
-| CREATE OR REPLACE VIEW table_name ddl_force_eof
+| CREATE OR REPLACE VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
-  }
-| CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
-        Name: $3,
-        Type: $4,
-        Params: $5,
-    }}
+    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName(), OptSelect: $7}
   }
 | CREATE DATABASE not_exists_opt ID ddl_force_eof
   {
@@ -703,48 +699,6 @@ create_statement:
 | CREATE SCHEMA not_exists_opt ID ddl_force_eof
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
-  }
-
-vindex_type_opt:
-  {
-    $$ = NewColIdent("")
-  }
-| USING vindex_type
-  {
-    $$ = $2
-  }
-
-vindex_type:
-  ID
-  {
-    $$ = NewColIdent(string($1))
-  }
-
-vindex_params_opt:
-  {
-    var v []VindexParam
-    $$ = v
-  }
-| WITH vindex_param_list
-  {
-    $$ = $2
-  }
-
-vindex_param_list:
-  vindex_param
-  {
-    $$ = make([]VindexParam, 0, 4)
-    $$ = append($$, $1)
-  }
-| vindex_param_list ',' vindex_param
-  {
-    $$ = append($$, $3)
-  }
-
-vindex_param:
-  reserved_sql_id '=' table_opt_value
-  {
-    $$ = VindexParam{Key: $1, Val: $3}
   }
 
 create_table_prefix:
@@ -1372,29 +1326,6 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{
-        Action: AddColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-            Type: $11,
-            Params: $12,
-        },
-        VindexCols: $9,
-      }
-  }
-| ALTER ignore_opt TABLE table_name DROP VINDEX sql_id
-  {
-    $$ = &DDL{
-        Action: DropColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-        },
-      }
-  }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
@@ -1405,9 +1336,9 @@ alter_statement:
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER VIEW table_name ddl_force_eof
+| ALTER VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
+    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName(), OptSelect: $5}
   }
 | ALTER ignore_opt TABLE table_name partition_operation
   {
@@ -1589,38 +1520,12 @@ show_statement:
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
-| SHOW VINDEXES
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VINDEXES ON table_name
-  {
-    $$ = &Show{Type: string($2), OnTable: $4}
-  }
-| SHOW VITESS_KEYSPACES
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_SHARDS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TABLETS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VSCHEMA_TABLES
-  {
-    $$ = &Show{Type: string($2)}
-  }
-/*
- * Catch-all for show statements without vitess keywords:
- *
- *  SHOW BINARY LOGS
- *  SHOW INVALID
- */
 | SHOW ID ddl_force_eof
   {
+    if !isAllowedGenericShowType($2) {
+      yylex.Error("invalid show statement")
+      return 1
+    }
     $$ = &Show{Type: string($2)}
   }
 
@@ -1846,11 +1751,11 @@ other_statement:
   {
     $$ = &OtherRead{}
   }
-| REPAIR force_eof
+| REPAIR TABLE force_eof
   {
     $$ = &OtherAdmin{}
   }
-| OPTIMIZE force_eof
+| OPTIMIZE TABLE force_eof
   {
     $$ = &OtherAdmin{}
   }
@@ -2478,10 +2383,6 @@ col_tuple:
   {
     $$ = $1
   }
-| LIST_ARG
-  {
-    $$ = ListArg($1)
-  }
 
 subquery:
   openb select_statement closeb
@@ -2975,25 +2876,6 @@ value:
     $$ = &NullVal{}
   }
 
-num_val:
-  sql_id
-  {
-    // TODO(sougou): Deprecate this construct.
-    if $1.Lowered() != "value" {
-      yylex.Error("expecting value after next")
-      return 1
-    }
-    $$ = NewIntVal([]byte("1"))
-  }
-| INTEGRAL VALUES
-  {
-    $$ = NewIntVal($1)
-  }
-| VALUE_ARG VALUES
-  {
-    $$ = NewValArg($1)
-  }
-
 group_by_opt:
   {
     $$ = nil
@@ -3363,10 +3245,16 @@ set_list:
 set_expression:
   reserved_sql_id '=' ON
   {
+    if rejectDeprecatedSetVar(yylex, $1) {
+      return 1
+    }
     $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
   }
 | reserved_sql_id '=' expression
   {
+    if rejectDeprecatedSetVar(yylex, $1) {
+      return 1
+    }
     $$ = &SetExpr{Name: $1, Expr: $3}
   }
 | charset_or_character_set charset_value collate_opt
@@ -3395,10 +3283,6 @@ charset_value:
   {
     $$ = &Default{}
   }
-
-for_from:
-  FOR
-| FROM
 
 exists_opt:
   { $$ = 0 }
@@ -3568,7 +3452,6 @@ reserved_keyword:
 | MEMBER
 | MOD
 | NATURAL
-| NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
 | NULL
 | OF
@@ -3724,11 +3607,6 @@ non_reserved_keyword:
 | VARIABLES
 | VIEW
 | VINDEX
-| VINDEXES
-| VITESS_KEYSPACES
-| VITESS_SHARDS
-| VITESS_TABLETS
-| VSCHEMA_TABLES
 | VIRTUAL
 | WITH
 | WRITE

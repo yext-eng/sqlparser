@@ -977,8 +977,6 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // OptSelect is set for CREATE TABLE ... AS SELECT statements.
 // TableSpec is set for CREATE TABLE statements, and ALTER TABLE ... ADD (...) statements.
 // AlterConstraint is set for ALTER TABLE ... ADD [CONSTRAINT name] CHECK (...) statements.
-// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr
-// VindexCols is set for AddColVindexStr
 type DDL struct {
 	Action          string
 	Temporary       bool
@@ -991,23 +989,15 @@ type DDL struct {
 	OptSelect       SelectStatement
 	PartitionSpec   *PartitionSpec
 	AlterConstraint *ConstraintDefinition
-	VindexSpec      *VindexSpec
-	VindexCols      []ColIdent
 }
 
 // DDL strings.
 const (
-	CreateStr        = "create"
-	AlterStr         = "alter"
-	DropStr          = "drop"
-	RenameStr        = "rename"
-	TruncateStr      = "truncate"
-	CreateVindexStr  = "create vindex"
-	AddColVindexStr  = "add vindex"
-	DropColVindexStr = "drop vindex"
-
-	// Vindex DDL param to specify the owner of a vindex
-	VindexOwnerStr = "owner"
+	CreateStr   = "create"
+	AlterStr    = "alter"
+	DropStr     = "drop"
+	RenameStr   = "rename"
+	TruncateStr = "truncate"
 )
 
 // Format formats the node.
@@ -1043,6 +1033,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case AlterStr:
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+		} else if node.OptSelect != nil {
+			buf.Myprintf("%s table %v as %v", node.Action, node.Table, node.OptSelect)
 		} else if node.TableSpec != nil {
 			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec)
 		} else if node.AlterConstraint != nil {
@@ -1050,23 +1042,6 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
-	case CreateVindexStr:
-		buf.Myprintf("%s %v %v", node.Action, node.VindexSpec.Name, node.VindexSpec)
-	case AddColVindexStr:
-		buf.Myprintf("alter table %v %s %v (", node.Table, node.Action, node.VindexSpec.Name)
-		for i, col := range node.VindexCols {
-			if i != 0 {
-				buf.Myprintf(", %v", col)
-			} else {
-				buf.Myprintf("%v", col)
-			}
-		}
-		buf.Myprintf(")")
-		if node.VindexSpec.Type.String() != "" {
-			buf.Myprintf(" %v", node.VindexSpec)
-		}
-	case DropColVindexStr:
-		buf.Myprintf("alter table %v %s %v", node.Table, node.Action, node.VindexSpec.Name)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -1604,82 +1579,6 @@ const (
 	colKeyUniqueKey
 	colKey
 )
-
-// VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
-type VindexSpec struct {
-	Name   ColIdent
-	Type   ColIdent
-	Params []VindexParam
-}
-
-// ParseParams parses the vindex parameter list, pulling out the special-case
-// "owner" parameter
-func (node *VindexSpec) ParseParams() (string, map[string]string) {
-	var owner string
-	params := map[string]string{}
-	for _, p := range node.Params {
-		if p.Key.Lowered() == VindexOwnerStr {
-			owner = p.Val
-		} else {
-			params[p.Key.String()] = p.Val
-		}
-	}
-	return owner, params
-}
-
-// Format formats the node. The "CREATE VINDEX" preamble was formatted in
-// the containing DDL node Format, so this just prints the type, any
-// parameters, and optionally the owner
-func (node *VindexSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("using %v", node.Type)
-
-	numParams := len(node.Params)
-	if numParams != 0 {
-		buf.Myprintf(" with ")
-		for i, p := range node.Params {
-			if i != 0 {
-				buf.Myprintf(", ")
-			}
-			buf.Myprintf("%v", p)
-		}
-	}
-}
-
-func (node *VindexSpec) walkSubtree(visit Visit) error {
-	err := Walk(visit,
-		node.Name,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	for _, p := range node.Params {
-		err := Walk(visit, p)
-
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// VindexParam defines a key/value parameter for a CREATE VINDEX statement
-type VindexParam struct {
-	Key ColIdent
-	Val string
-}
-
-// Format formats the node.
-func (node VindexParam) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s=%s", node.Key.String(), node.Val)
-}
-
-func (node VindexParam) walkSubtree(visit Visit) error {
-	return Walk(visit,
-		node.Key,
-	)
-}
 
 // Show represents a show statement.
 type Show struct {

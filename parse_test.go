@@ -197,16 +197,6 @@ var (
 	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
-		input:  "select next value for t",
-		output: "select next 1 values from t",
-	}, {
-		input:  "select next value from t",
-		output: "select next 1 values from t",
-	}, {
-		input: "select next 10 values from t",
-	}, {
-		input: "select next :a values from t",
-	}, {
 		input: "select /* `By`.* */ `By`.* from t",
 	}, {
 		input: "select /* select with bool expr */ a = b from t",
@@ -537,21 +527,11 @@ var (
 	}, {
 		input: "select /* unescaped backslash */ '\\n' from t",
 	}, {
-		input: "select /* value argument */ :a from t",
-	}, {
-		input: "select /* value argument with digit */ :a1 from t",
-	}, {
-		input: "select /* value argument with dot */ :a.b from t",
-	}, {
 		input:  "select /* positional argument */ ? from t",
 		output: "select /* positional argument */ :v1 from t",
 	}, {
 		input:  "select /* multiple positional arguments */ ?, ? from t",
 		output: "select /* multiple positional arguments */ :v1, :v2 from t",
-	}, {
-		input: "select /* list arg */ * from t where a in ::list",
-	}, {
-		input: "select /* list arg not in */ * from t where a not in ::list",
 	}, {
 		input: "select /* null */ null from t",
 	}, {
@@ -775,8 +755,6 @@ var (
 	}, {
 		input: "set @@session.`autocommit` = true",
 	}, {
-		input: "set @@session.'autocommit' = true",
-	}, {
 		input: "set @@session.\"autocommit\" = true",
 	}, {
 		input:  "set names utf8 collate foo",
@@ -824,18 +802,6 @@ var (
 	}, {
 		input:  "set transaction read only",
 		output: "set tx_read_only = 1",
-	}, {
-		input: "set tx_read_only = 1",
-	}, {
-		input: "set tx_read_only = 0",
-	}, {
-		input: "set tx_isolation = 'repeatable read'",
-	}, {
-		input: "set tx_isolation = 'read committed'",
-	}, {
-		input: "set tx_isolation = 'read uncommitted'",
-	}, {
-		input: "set tx_isolation = 'serializable'",
 	}, {
 		input: "set sql_safe_updates = 0",
 	}, {
@@ -986,37 +952,6 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
-		input: "alter table a add vindex hash (id)",
-	}, {
-		input:  "alter table a add vindex `hash` (`id`)",
-		output: "alter table a add vindex hash (id)",
-	}, {
-		input:  "alter table a add vindex hash (id) using `hash`",
-		output: "alter table a add vindex hash (id) using hash",
-	}, {
-		input: "alter table a add vindex `add` (`add`)",
-	}, {
-		input: "alter table a add vindex hash (id) using hash",
-	}, {
-		input:  "alter table a add vindex hash (id) using `hash`",
-		output: "alter table a add vindex hash (id) using hash",
-	}, {
-		input: "alter table user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-	}, {
-		input:  "alter table user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter table user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
-	}, {
-		input: "alter table a drop vindex hash",
-	}, {
-		input:  "alter table a drop vindex `hash`",
-		output: "alter table a drop vindex hash",
-	}, {
-		input:  "alter table a drop vindex hash",
-		output: "alter table a drop vindex hash",
-	}, {
-		input:  "alter table a drop vindex `add`",
-		output: "alter table a drop vindex `add`",
-	}, {
 		input: "create table a",
 	}, {
 		input: "create temporary table a",
@@ -1047,12 +982,6 @@ var (
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
 	}, {
-		input: "create vindex hash_vdx using hash",
-	}, {
-		input: "create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
-	}, {
-		input: "create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
-	}, {
 		input:  "create index a on b",
 		output: "alter table b",
 	}, {
@@ -1068,14 +997,14 @@ var (
 		input:  "create spatial index a using foo on b",
 		output: "alter table b",
 	}, {
-		input:  "create view a",
-		output: "create table a",
+		input:  "create view a as select 1",
+		output: "create table a as select 1 from dual",
 	}, {
-		input:  "create or replace view a",
-		output: "create table a",
+		input:  "create or replace view a as select 1",
+		output: "create table a as select 1 from dual",
 	}, {
-		input:  "alter view a",
-		output: "alter table a",
+		input:  "alter view a as select 1",
+		output: "alter table a as select 1 from dual",
 	}, {
 		input:  "drop view a",
 		output: "drop table a",
@@ -1260,28 +1189,8 @@ var (
 		input:  "show session variables",
 		output: "show session variables",
 	}, {
-		input:  "show vindexes",
-		output: "show vindexes",
-	}, {
-		input:  "show vindexes on t",
-		output: "show vindexes on t",
-	}, {
-		input: "show vitess_keyspaces",
-	}, {
-		input: "show vitess_shards",
-	}, {
-		input: "show vitess_tablets",
-	}, {
-		input: "show vschema_tables",
-	}, {
 		input:  "show warnings",
 		output: "show warnings",
-	}, {
-		input:  "show foobar",
-		output: "show foobar",
-	}, {
-		input:  "show foobar like select * from table where syntax is 'ignored'",
-		output: "show foobar",
 	}, {
 		input:  "use db",
 		output: "use db",
@@ -1307,10 +1216,10 @@ var (
 		input:  "truncate foo",
 		output: "truncate table foo",
 	}, {
-		input:  "repair foo",
+		input:  "repair table foo",
 		output: "otheradmin",
 	}, {
-		input:  "optimize foo",
+		input:  "optimize table foo",
 		output: "otheradmin",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
@@ -1398,10 +1307,6 @@ var (
 		input: "replace into t partition (p0) values (1, 'asdf')",
 	}, {
 		input: "delete from t partition (p0) where a = 1",
-	}, {
-		input: "stream * from t",
-	}, {
-		input: "stream /* comment */ * from t",
 	}, {
 		input: "begin",
 	}, {
@@ -1547,6 +1452,44 @@ func TestValuesInvalid(t *testing.T) {
 	}
 }
 
+func TestMySQL80RemovedSyntaxInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"select next value for t",
+		"select next 10 values from t",
+		"stream * from t",
+		"stream /* comment */ * from t",
+		"select :a from t",
+		"select :a1 from t",
+		"select :a.b from t",
+		"select * from t where a in ::list",
+		"create vindex hash_vdx using hash",
+		"alter table a add vindex hash (id)",
+		"alter table a drop vindex hash",
+		"show vindexes",
+		"show vindexes on t",
+		"show vitess_keyspaces",
+		"show vitess_shards",
+		"show vitess_tablets",
+		"show vschema_tables",
+		"show foobar",
+		"show foobar like select * from table where syntax is 'ignored'",
+		"create view a",
+		"alter view a",
+		"repair foo",
+		"optimize foo",
+		"set tx_isolation = 'repeatable read'",
+		"set tx_read_only = 1",
+		"set session tx_isolation = 'repeatable read'",
+		"set session tx_read_only = 1",
+		"set @@session.'autocommit' = true",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
 func TestCaseSensitivity(t *testing.T) {
 	validSQL := []struct {
 		input  string
@@ -1565,8 +1508,8 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
-		input:  "alter view A foo",
-		output: "alter table a",
+		input:  "alter view A as select 1",
+		output: "alter table a as select 1 from dual",
 	}, {
 		input:  "alter table A rename to B",
 		output: "rename table A to B",
@@ -1615,11 +1558,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A",
-		output: "create table a",
+		input:  "create view A as select 1",
+		output: "create table a as select 1 from dual",
 	}, {
-		input:  "alter view A",
-		output: "alter table a",
+		input:  "alter view A as select 1",
+		output: "alter table a as select 1 from dual",
 	}, {
 		input:  "drop view A",
 		output: "drop table a",
@@ -1635,9 +1578,6 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "select /* FOR UPDATE SKIP LOCKED */ 1 from t FOR UPDATE SKIP LOCKED",
 		output: "select /* FOR UPDATE SKIP LOCKED */ 1 from t for update skip locked",
-	}, {
-		input:  "select next VALUE from t",
-		output: "select next 1 values from t",
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
@@ -2230,10 +2170,10 @@ var (
 		output: "syntax error at position 24 near ':'",
 	}, {
 		input:  "select * from t where ::1 = 2",
-		output: "syntax error at position 25 near '::'",
+		output: "syntax error at position 24 near ':'",
 	}, {
 		input:  "select * from t where ::. = 2",
-		output: "syntax error at position 25 near '::'",
+		output: "syntax error at position 24 near ':'",
 	}, {
 		input:  "update a set c = values(1)",
 		output: "syntax error at position 26 near '1'",
@@ -2271,11 +2211,8 @@ var (
 		input:  "select * from a natural join b using (c)",
 		output: "syntax error at position 37 near 'using'",
 	}, {
-		input:  "select next id from a",
-		output: "expecting value after next at position 15 near 'id'",
-	}, {
 		input:  "select next 1+1 values from a",
-		output: "syntax error at position 15",
+		output: "syntax error at position 14 near '1'",
 	}, {
 		input:  "insert into a values (select * from b)",
 		output: "syntax error at position 29 near 'select'",

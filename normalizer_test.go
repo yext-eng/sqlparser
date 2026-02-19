@@ -62,10 +62,10 @@ func TestNormalize(t *testing.T) {
 		},
 	}, {
 		// bv collision
-		in:      "select * from t where v1 = :bv1 and v2 = 1",
-		outstmt: "select * from t where v1 = :bv1 and v2 = :bv2",
+		in:      "select * from t where v1 = :v1 and v2 = 1",
+		outstmt: "select * from t where v1 = :v1 and v2 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
-			"bv2": sqltypes.Int64BindVariable(1),
+			"bv1": sqltypes.Int64BindVariable(1),
 		},
 	}, {
 		// val reuse
@@ -144,8 +144,8 @@ func TestNormalize(t *testing.T) {
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// IN clause with existing bv
-		in:      "select * from t where v1 in ::list",
-		outstmt: "select * from t where v1 in ::list",
+		in:      "select * from t where v1 = :v1",
+		outstmt: "select * from t where v1 = :v1",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// IN clause with non-val values
@@ -188,7 +188,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestGetBindVars(t *testing.T) {
-	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
+	stmt, err := Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 = :v5")
 	if err != nil {
 		t.Fatal(err)
 	}

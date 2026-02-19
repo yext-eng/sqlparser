@@ -2200,6 +2200,10 @@ func TestCreateTable(t *testing.T) {
 		"create table t (id int) partition by range id (partition p0 values less than (10))",
 		// VALUES LESS THAN limit must be parenthesized for non-MAXVALUE expressions.
 		"create table t (id int) partition by range (id) (partition p0 values less than 10)",
+		// ENGINE option requires a value.
+		"create table t (id int) partition by range (id) (partition p0 values less than (10) engine =)",
+		// STORAGE ENGINE option requires the ENGINE keyword.
+		"create table t (id int) partition by range (id) (partition p0 values less than (10) storage = InnoDB)",
 	}
 	for _, sql := range invalidCreateTablePartitionSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2283,6 +2287,49 @@ func TestCreateTable(t *testing.T) {
 			"\tid bigint unsigned not null auto_increment,\n" +
 			"\tprimary key (id)\n" +
 			") partition by range (id) (partition p0 values less than (100), partition p1 values less than (maxvalue))",
+	}, {
+		input: "create table t (\n" +
+			"	id bigint unsigned not null auto_increment,\n" +
+			"	primary key (id)\n" +
+			") partition by range (id) (\n" +
+			"	partition p0 values less than (100) engine = InnoDB,\n" +
+			"	partition p1 values less than maxvalue engine InnoDB\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid bigint unsigned not null auto_increment,\n" +
+			"\tprimary key (id)\n" +
+			") partition by range (id) (partition p0 values less than (100) engine InnoDB, partition p1 values less than (maxvalue) engine InnoDB)",
+	}, {
+		input: "create table t (\n" +
+			"	id bigint unsigned not null auto_increment,\n" +
+			"	primary key (id)\n" +
+			") partition by range (id) (\n" +
+			"	partition p0 values less than (100) storage engine InnoDB,\n" +
+			"	partition p1 values less than maxvalue storage engine=InnoDB\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid bigint unsigned not null auto_increment,\n" +
+			"\tprimary key (id)\n" +
+			") partition by range (id) (partition p0 values less than (100) engine InnoDB, partition p1 values less than (maxvalue) engine InnoDB)",
+	}, {
+		input: "create table update_files (\n" +
+			"	update_id bigint(20) not null,\n" +
+			"	path varchar(1024) collate utf8mb4_unicode_ci not null,\n" +
+			"	update_type enum('ADD','DELETE') character set ascii collate ascii_bin not null,\n" +
+			"	redirect_location varchar(1024) collate utf8mb4_unicode_ci default null,\n" +
+			"	already_exists_and_equal tinyint(1) default null,\n" +
+			"	key update_id (update_id)\n" +
+			") engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci /*!50100 partition by range (update_id)\n" +
+			"(partition id20200000 values less than (20200000) engine = InnoDB,\n" +
+			" partition latest values less than maxvalue engine = InnoDB) */",
+		output: "create table update_files (\n" +
+			"\tupdate_id bigint(20) not null,\n" +
+			"\t`path` varchar(1024) collate utf8mb4_unicode_ci not null,\n" +
+			"\tupdate_type enum('ADD', 'DELETE') character set ascii collate ascii_bin not null,\n" +
+			"\tredirect_location varchar(1024) collate utf8mb4_unicode_ci default null,\n" +
+			"\talready_exists_and_equal tinyint(1) default null,\n" +
+			"\tkey update_id (update_id)\n" +
+			") engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci partition by range (update_id) (partition id20200000 values less than (20200000) engine InnoDB, partition latest values less than (maxvalue) engine InnoDB)",
 	},
 	}
 	for _, tcase := range testCases {

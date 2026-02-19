@@ -1577,13 +1577,109 @@ partition_definition:
   {
     $$ = &PartitionDefinition{Name: $2, Limit: $7}
   }
+| PARTITION sql_id VALUES LESS THAN openb value_expression closeb sql_id '=' sql_id
+  {
+    if !$9.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Limit: $7, Engine: $11}
+  }
+| PARTITION sql_id VALUES LESS THAN openb value_expression closeb sql_id sql_id
+  {
+    if !$9.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Limit: $7, Engine: $10}
+  }
+| PARTITION sql_id VALUES LESS THAN openb value_expression closeb sql_id sql_id '=' sql_id
+  {
+    if !$9.EqualString("storage") || !$10.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Limit: $7, Engine: $12}
+  }
+| PARTITION sql_id VALUES LESS THAN openb value_expression closeb sql_id sql_id sql_id
+  {
+    if !$9.EqualString("storage") || !$10.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Limit: $7, Engine: $11}
+  }
 | PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
   {
     $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
   }
+| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb sql_id '=' sql_id
+  {
+    if !$9.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $11}
+  }
+| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb sql_id sql_id
+  {
+    if !$9.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $10}
+  }
+| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb sql_id sql_id '=' sql_id
+  {
+    if !$9.EqualString("storage") || !$10.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $12}
+  }
+| PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb sql_id sql_id sql_id
+  {
+    if !$9.EqualString("storage") || !$10.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $11}
+  }
 | PARTITION sql_id VALUES LESS THAN MAXVALUE
   {
     $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
+  }
+| PARTITION sql_id VALUES LESS THAN MAXVALUE sql_id '=' sql_id
+  {
+    if !$7.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $9}
+  }
+| PARTITION sql_id VALUES LESS THAN MAXVALUE sql_id sql_id
+  {
+    if !$7.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $8}
+  }
+| PARTITION sql_id VALUES LESS THAN MAXVALUE sql_id sql_id '=' sql_id
+  {
+    if !$7.EqualString("storage") || !$8.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $10}
+  }
+| PARTITION sql_id VALUES LESS THAN MAXVALUE sql_id sql_id sql_id
+  {
+    if !$7.EqualString("storage") || !$8.EqualString("engine") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true, Engine: $9}
   }
 
 rename_statement:

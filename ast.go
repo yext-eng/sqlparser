@@ -1133,6 +1133,7 @@ type PartitionDefinition struct {
 	Name     ColIdent
 	Limit    Expr
 	Maxvalue bool
+	Engine   ColIdent
 }
 
 // Format formats the node
@@ -1141,6 +1142,9 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 		buf.Myprintf("partition %v values less than (%v)", node.Name, node.Limit)
 	} else {
 		buf.Myprintf("partition %v values less than (maxvalue)", node.Name)
+	}
+	if !node.Engine.IsEmpty() {
+		buf.Myprintf(" engine %v", node.Engine)
 	}
 }
 
@@ -1152,6 +1156,7 @@ func (node *PartitionDefinition) walkSubtree(visit Visit) error {
 		visit,
 		node.Name,
 		node.Limit,
+		node.Engine,
 	)
 }
 

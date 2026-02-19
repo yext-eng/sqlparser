@@ -2185,6 +2185,14 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add foreign key (parent_id) references parent",
 		// Local FK columns must appear as a parenthesized list after FOREIGN KEY.
 		"alter table t add foreign key parent_id references parent (id)",
+		// Inline REFERENCES also requires a referenced column list.
+		"create table t (parent_id int references parent)",
+		// Inline referenced columns must be enclosed in parentheses.
+		"create table t (parent_id int references parent id)",
+		// Inline REFERENCES in ALTER TABLE ... ADD (...) also requires a referenced column list.
+		"alter table t add (parent_id int references parent)",
+		// Inline referenced columns in ALTER TABLE ... ADD (...) must be enclosed in parentheses.
+		"alter table t add (parent_id int references parent id)",
 	}
 	for _, sql := range invalidForeignKeySQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2263,6 +2271,18 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "alter table t add foreign key (parent_id) references parent (id) on delete set null on update cascade",
 		output: "alter table t add foreign key (parent_id) references parent (id) on delete set null on update cascade",
+	}, {
+		input:  "create table t (\n\tparent_id int references parent (id)\n)",
+		output: "create table t (\n\tparent_id int references parent (id)\n)",
+	}, {
+		input:  "create table t (\n\tparent_id int not null references parent (id) on delete set null on update cascade\n)",
+		output: "create table t (\n\tparent_id int not null references parent (id) on delete set null on update cascade\n)",
+	}, {
+		input:  "alter table t add (\n\tparent_id int references parent (id)\n)",
+		output: "alter table t add (\n\tparent_id int references parent (id)\n)",
+	}, {
+		input:  "alter table t add (\n\tparent_id int not null references parent (id) on delete set null on update cascade\n)",
+		output: "alter table t add (\n\tparent_id int not null references parent (id) on delete set null on update cascade\n)",
 	}, {
 		input:  "alter table t drop foreign key fk_parent",
 		output: "alter table t drop foreign key fk_parent",

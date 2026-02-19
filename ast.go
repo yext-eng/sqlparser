@@ -1272,6 +1272,39 @@ func (cd *ConstraintDefinition) walkSubtree(visit Visit) error {
 	)
 }
 
+// ReferenceDefinition describes a REFERENCES clause.
+type ReferenceDefinition struct {
+	ReferencedTable   TableName
+	ReferencedColumns Columns
+	OnDeleteAction    string
+	OnUpdateAction    string
+}
+
+// Format formats the node.
+func (rd *ReferenceDefinition) Format(buf *TrackedBuffer) {
+	if rd == nil {
+		return
+	}
+	buf.Myprintf("references %v %v", rd.ReferencedTable, rd.ReferencedColumns)
+	if rd.OnDeleteAction != "" {
+		buf.Myprintf(" on delete %s", rd.OnDeleteAction)
+	}
+	if rd.OnUpdateAction != "" {
+		buf.Myprintf(" on update %s", rd.OnUpdateAction)
+	}
+}
+
+func (rd *ReferenceDefinition) walkSubtree(visit Visit) error {
+	if rd == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		rd.ReferencedTable,
+		rd.ReferencedColumns,
+	)
+}
+
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
 	Name ColIdent
@@ -1325,6 +1358,9 @@ type ColumnType struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+
+	// Inline foreign key reference definition for column-level REFERENCES.
+	Reference *ReferenceDefinition
 }
 
 // Format returns a canonical string representation of the type and all relevant options
@@ -1394,6 +1430,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
+	}
+	if ct.Reference != nil {
+		buf.Myprintf(" %v", ct.Reference)
 	}
 }
 
@@ -1523,7 +1562,7 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 	if ct == nil {
 		return nil
 	}
-	return Walk(visit, ct.GeneratedExpr)
+	return Walk(visit, ct.GeneratedExpr, ct.Reference)
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

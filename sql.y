@@ -125,6 +125,7 @@ func isAllowedGenericShowType(id []byte) bool {
   optVal        *SQLVal
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
+  referenceDefinition *ReferenceDefinition
   indexDefinition *IndexDefinition
   constraintDefinition *ConstraintDefinition
   indexInfo     *IndexInfo
@@ -352,6 +353,8 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <indexDefinition> alter_index_definition
 %type <constraintDefinition> constraint_definition
 %type <constraintDefinition> foreign_key_definition
+%type <referenceDefinition> reference_definition
+%type <referenceDefinition> reference_definition_opt
 %type <str> index_or_key
 %type <str> index_or_key_opt
 %type <colIdent> index_name_opt
@@ -753,7 +756,7 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt reference_definition_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -761,9 +764,10 @@ column_definition:
     $2.Autoincrement = $6
     $2.KeyOpt = $7
     $2.Comment = $8
+    $2.Reference = $9
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| sql_id column_type auto_increment_opt null_opt column_default_opt on_update_opt column_key_opt column_comment_opt
+| sql_id column_type auto_increment_opt null_opt column_default_opt on_update_opt column_key_opt column_comment_opt reference_definition_opt
   {
     $2.Autoincrement = $3
     $2.NotNull = $4
@@ -771,6 +775,7 @@ column_definition:
     $2.OnUpdate = $6
     $2.KeyOpt = $7
     $2.Comment = $8
+    $2.Reference = $9
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 | sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
@@ -1238,14 +1243,35 @@ constraint_definition:
   }
 
 foreign_key_definition:
-  FOREIGN KEY openb column_list closeb REFERENCES table_name openb column_list closeb reference_option_list_opt
+  FOREIGN KEY openb column_list closeb reference_definition
   {
+    if $6 == nil {
+      yylex.(*Tokenizer).Error("missing reference definition")
+      return 1
+    }
     $$ = &ConstraintDefinition{
       ForeignKeyColumns: $4,
-      ReferencedTable: $7,
-      ReferencedColumns: $9,
+      ReferencedTable: $6.ReferencedTable,
+      ReferencedColumns: $6.ReferencedColumns,
+      OnDeleteAction: $6.OnDeleteAction,
+      OnUpdateAction: $6.OnUpdateAction,
     }
-    for _, option := range $11 {
+  }
+
+reference_definition_opt:
+  {
+    $$ = nil
+  }
+| reference_definition
+
+reference_definition:
+  REFERENCES table_name openb column_list closeb reference_option_list_opt
+  {
+    $$ = &ReferenceDefinition{
+      ReferencedTable: $2,
+      ReferencedColumns: $4,
+    }
+    for _, option := range $6 {
       if strings.HasPrefix(option, "delete:") {
         $$.OnDeleteAction = strings.TrimPrefix(option, "delete:")
       } else if strings.HasPrefix(option, "update:") {

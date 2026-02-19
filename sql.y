@@ -353,6 +353,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <constraintDefinition> constraint_definition
 %type <constraintDefinition> foreign_key_definition
 %type <str> index_or_key
+%type <str> index_or_key_opt
 %type <colIdent> index_name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
@@ -1334,13 +1335,13 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Spatial: true, Unique: false}
   }
-| UNIQUE index_or_key index_name_opt
+| UNIQUE index_or_key_opt index_name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Unique: true}
-  }
-| UNIQUE sql_id
-  {
-    $$ = &IndexInfo{Type: string($1), Name: $2, Unique: true}
+    indexType := string($1)
+    if $2 != "" {
+      indexType += " " + string($2)
+    }
+    $$ = &IndexInfo{Type: indexType, Name: $3, Unique: true}
   }
 | index_or_key index_name_opt
   {
@@ -1348,9 +1349,13 @@ index_info:
   }
 
 alter_index_info:
-  UNIQUE index_or_key index_name_opt
+  UNIQUE index_or_key_opt index_name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Unique: true}
+    indexType := string($1)
+    if $2 != "" {
+      indexType += " " + string($2)
+    }
+    $$ = &IndexInfo{Type: indexType, Name: $3, Unique: true}
   }
 | index_or_key index_name_opt
   {
@@ -1365,6 +1370,16 @@ index_or_key:
   | KEY
   {
     $$ = string($1)
+  }
+
+index_or_key_opt:
+  index_or_key
+  {
+    $$ = $1
+  }
+| /* empty */
+  {
+    $$ = ""
   }
 
 index_name_opt:

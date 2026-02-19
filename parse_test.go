@@ -897,8 +897,14 @@ var (
 		input:  "alter table a add unique key uk_id (id)",
 		output: "alter table a add unique key uk_id (id)",
 	}, {
+		input:  "alter table a add unique uk_id (id)",
+		output: "alter table a add unique uk_id (id)",
+	}, {
 		input:  "alter table a add unique index uk_id (id)",
 		output: "alter table a add unique index uk_id (id)",
+	}, {
+		input:  "alter table a add unique (id)",
+		output: "alter table a add unique (id)",
 	}, {
 		input:  "alter table a add unique key (id)",
 		output: "alter table a add unique key (id)",
@@ -1991,6 +1997,8 @@ func TestCreateTable(t *testing.T) {
 			"	col1 int,\n" +
 			"	col2 int,\n" +
 			"	col3 int,\n" +
+			"	col4 int,\n" +
+			"	unique (col4),\n" +
 			"	unique key (col1),\n" +
 			"	unique index (col2),\n" +
 			"	key (col3),\n" +

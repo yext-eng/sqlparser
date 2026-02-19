@@ -2156,6 +2156,21 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	invalidCreateTablePartitionSQL := []string{
+		// Missing partition definition list after PARTITION BY RANGE (...).
+		"create table t (id int) partition by range (id)",
+		// RANGE expression must be parenthesized.
+		"create table t (id int) partition by range id (partition p0 values less than (10))",
+		// VALUES LESS THAN limit must be parenthesized for non-MAXVALUE expressions.
+		"create table t (id int) partition by range (id) (partition p0 values less than 10)",
+	}
+	for _, sql := range invalidCreateTablePartitionSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
 	testCases := []struct {
 		input  string
 		output string
@@ -2219,6 +2234,18 @@ func TestCreateTable(t *testing.T) {
 			"\tid bigint(20) unsigned not null auto_increment,\n" +
 			"\tid2 bigint(20) unsigned not null auto_increment\n" +
 			")",
+	}, {
+		input: "create table t (\n" +
+			"	id bigint unsigned not null auto_increment,\n" +
+			"	primary key (id)\n" +
+			") partition by range (id) (\n" +
+			"	partition p0 values less than (100),\n" +
+			"	partition p1 values less than maxvalue\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid bigint unsigned not null auto_increment,\n" +
+			"\tprimary key (id)\n" +
+			") partition by range (id) (partition p0 values less than (100), partition p1 values less than (maxvalue))",
 	},
 	}
 	for _, tcase := range testCases {

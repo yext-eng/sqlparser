@@ -368,7 +368,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <strs> reference_option_list reference_option_list_opt
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
-%type <partSpec> partition_operation
+%type <partSpec> partition_operation partition_opt
 %type <bytes> alter_object_type alter_add_object_type
 
 %start any_command
@@ -676,9 +676,10 @@ set_session_or_global:
   }
 
 create_statement:
-  create_table_prefix table_spec
+  create_table_prefix table_spec partition_opt
   {
     $1.TableSpec = $2
+    $1.PartitionSpec = $3
     $$ = $1
   }
 | create_table_prefix LIKE table_name
@@ -1552,6 +1553,15 @@ partition_operation:
     $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
   }
 
+partition_opt:
+  {
+    $$ = nil
+  }
+| PARTITION BY RANGE openb value_expression closeb openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: PartitionByRangeStr, Expr: $5, Definitions: $8}
+  }
+
 partition_definitions:
   partition_definition
   {
@@ -1568,6 +1578,10 @@ partition_definition:
     $$ = &PartitionDefinition{Name: $2, Limit: $7}
   }
 | PARTITION sql_id VALUES LESS THAN openb MAXVALUE closeb
+  {
+    $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
+  }
+| PARTITION sql_id VALUES LESS THAN MAXVALUE
   {
     $$ = &PartitionDefinition{Name: $2, Maxvalue: true}
   }
@@ -3750,7 +3764,6 @@ non_reserved_keyword:
 | OPTION
 | OPTIMIZE
 | ORDINALITY
-| PARTITION
 | PATH
 | POINT
 | POLYGON

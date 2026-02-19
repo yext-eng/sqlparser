@@ -1020,6 +1020,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		switch {
 		case node.TableSpec != nil:
 			buf.Myprintf("%s %stable %s%v %v", node.Action, temporary, notExists, node.NewName, node.TableSpec)
+			if node.PartitionSpec != nil {
+				buf.Myprintf(" %v", node.PartitionSpec)
+			}
 		case !node.LikeTable.IsEmpty():
 			buf.Myprintf("%s %stable %s%v like %v", node.Action, temporary, notExists, node.NewName, node.LikeTable)
 		case node.OptSelect != nil:
@@ -1067,6 +1070,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		node.LikeTable,
 		node.OptSelect,
 		node.TableSpec,
+		node.PartitionSpec,
 		node.AlterConstraint,
 		node.AlterDropForeignKey,
 		node.AlterIndex,
@@ -1075,13 +1079,15 @@ func (node *DDL) walkSubtree(visit Visit) error {
 
 // Partition strings
 const (
-	ReorganizeStr = "reorganize partition"
+	ReorganizeStr       = "reorganize partition"
+	PartitionByRangeStr = "partition by range"
 )
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
 	Action      string
 	Name        ColIdent
+	Expr        Expr
 	Definitions []*PartitionDefinition
 }
 
@@ -1090,15 +1096,18 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeStr:
 		buf.Myprintf("%s %v into (", node.Action, node.Name)
-		var prefix string
-		for _, pd := range node.Definitions {
-			buf.Myprintf("%s%v", prefix, pd)
-			prefix = ", "
-		}
-		buf.Myprintf(")")
+	case PartitionByRangeStr:
+		buf.Myprintf("%s (%v) (", node.Action, node.Expr)
 	default:
 		panic("unimplemented")
 	}
+
+	var prefix string
+	for _, pd := range node.Definitions {
+		buf.Myprintf("%s%v", prefix, pd)
+		prefix = ", "
+	}
+	buf.Myprintf(")")
 }
 
 func (node *PartitionSpec) walkSubtree(visit Visit) error {
@@ -1106,6 +1115,9 @@ func (node *PartitionSpec) walkSubtree(visit Visit) error {
 		return nil
 	}
 	if err := Walk(visit, node.Name); err != nil {
+		return err
+	}
+	if err := Walk(visit, node.Expr); err != nil {
 		return err
 	}
 	for _, def := range node.Definitions {

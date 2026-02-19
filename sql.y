@@ -17,6 +17,8 @@ limitations under the License.
 %{
 package sqlparser
 
+import "strings"
+
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -195,13 +197,14 @@ func isAllowedGenericShowType(id []byte) bool {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
-%token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
 %token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
+%token <bytes> CASCADE RESTRICT ACTION NO
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -348,6 +351,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <indexDefinition> index_definition
 %type <indexDefinition> alter_index_definition
 %type <constraintDefinition> constraint_definition
+%type <constraintDefinition> foreign_key_definition
 %type <str> index_or_key
 %type <colIdent> index_name_opt
 %type <str> equal_opt
@@ -359,6 +363,8 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list
+%type <str> reference_action reference_option
+%type <strs> reference_option_list reference_option_list_opt
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -1212,6 +1218,77 @@ constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: $2, Expr: $5}
   }
+| foreign_key_definition
+| CONSTRAINT sql_id foreign_key_definition
+  {
+    $3.Name = $2
+    $$ = $3
+  }
+
+foreign_key_definition:
+  FOREIGN KEY openb column_list closeb REFERENCES table_name openb column_list closeb reference_option_list_opt
+  {
+    $$ = &ConstraintDefinition{
+      ForeignKeyColumns: $4,
+      ReferencedTable: $7,
+      ReferencedColumns: $9,
+    }
+    for _, option := range $11 {
+      if strings.HasPrefix(option, "delete:") {
+        $$.OnDeleteAction = strings.TrimPrefix(option, "delete:")
+      } else if strings.HasPrefix(option, "update:") {
+        $$.OnUpdateAction = strings.TrimPrefix(option, "update:")
+      }
+    }
+  }
+
+reference_option_list_opt:
+  {
+    $$ = nil
+  }
+| reference_option_list
+
+reference_option_list:
+  reference_option
+  {
+    $$ = []string{$1}
+  }
+| reference_option_list reference_option
+  {
+    $$ = append($1, $2)
+  }
+
+reference_option:
+  ON DELETE reference_action
+  {
+    $$ = "delete:" + $3
+  }
+| ON UPDATE reference_action
+  {
+    $$ = "update:" + $3
+  }
+
+reference_action:
+  RESTRICT
+  {
+    $$ = string($1)
+  }
+| CASCADE
+  {
+    $$ = string($1)
+  }
+| SET NULL
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| SET DEFAULT
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| NO ACTION
+  {
+    $$ = string($1) + " " + string($2)
+  }
 
 index_option_list:
   index_option
@@ -1380,6 +1457,10 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
+| ALTER ignore_opt TABLE table_name ADD FOREIGN KEY force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
 | ALTER ignore_opt TABLE table_name ADD alter_add_object_type force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
@@ -1387,6 +1468,14 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name DROP alter_object_type force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name DROP FOREIGN KEY force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name DROP FOREIGN KEY sql_id force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterDropForeignKey: $8}
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
@@ -3462,7 +3551,8 @@ reserved_table_id:
   Sorted alphabetically
 */
 reserved_keyword:
-  ADD
+  ACTION
+| ADD
 | AND
 | AS
 | ASC
@@ -3470,6 +3560,7 @@ reserved_keyword:
 | BETWEEN
 | BINARY
 | BY
+| CASCADE
 | CASE
 | CHECK
 | COLLATE
@@ -3524,6 +3615,7 @@ reserved_keyword:
 | MEMBER
 | MOD
 | NATURAL
+| NO
 | NOT
 | NULL
 | OF
@@ -3533,8 +3625,10 @@ reserved_keyword:
 | OVER
 | OUTER
 | REGEXP
+| REFERENCES
 | RENAME
 | REPLACE
+| RESTRICT
 | RIGHT
 | SCHEMA
 | SELECT

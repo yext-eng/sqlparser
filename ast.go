@@ -976,21 +976,24 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // LikeTable is set for CREATE TABLE ... LIKE statements.
 // OptSelect is set for CREATE TABLE ... AS SELECT statements.
 // TableSpec is set for CREATE TABLE statements, and ALTER TABLE ... ADD (...) statements.
-// AlterConstraint is set for ALTER TABLE ... ADD [CONSTRAINT name] CHECK (...) statements.
+// AlterConstraint is set for ALTER TABLE ... ADD [CONSTRAINT name] CHECK (...) and
+// ALTER TABLE ... ADD [CONSTRAINT name] FOREIGN KEY (...) REFERENCES ... statements.
+// AlterDropForeignKey is set for ALTER TABLE ... DROP FOREIGN KEY <name> statements.
 // AlterIndex is set for ALTER TABLE ... ADD [UNIQUE] [KEY|INDEX] [name] (...) statements.
 type DDL struct {
-	Action          string
-	Temporary       bool
-	IfNotExists     bool
-	Table           TableName
-	NewName         TableName
-	IfExists        bool
-	TableSpec       *TableSpec
-	LikeTable       TableName
-	OptSelect       SelectStatement
-	PartitionSpec   *PartitionSpec
-	AlterConstraint *ConstraintDefinition
-	AlterIndex      *IndexDefinition
+	Action              string
+	Temporary           bool
+	IfNotExists         bool
+	Table               TableName
+	NewName             TableName
+	IfExists            bool
+	TableSpec           *TableSpec
+	LikeTable           TableName
+	OptSelect           SelectStatement
+	PartitionSpec       *PartitionSpec
+	AlterConstraint     *ConstraintDefinition
+	AlterDropForeignKey ColIdent
+	AlterIndex          *IndexDefinition
 }
 
 // DDL strings.
@@ -1041,6 +1044,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec)
 		} else if node.AlterConstraint != nil {
 			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.AlterConstraint)
+		} else if !node.AlterDropForeignKey.IsEmpty() {
+			buf.Myprintf("%s table %v drop foreign key %v", node.Action, node.Table, node.AlterDropForeignKey)
 		} else if node.AlterIndex != nil {
 			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.AlterIndex)
 		} else {
@@ -1063,6 +1068,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		node.OptSelect,
 		node.TableSpec,
 		node.AlterConstraint,
+		node.AlterDropForeignKey,
 		node.AlterIndex,
 	)
 }
@@ -1207,8 +1213,13 @@ func (ts *TableSpec) walkSubtree(visit Visit) error {
 
 // ConstraintDefinition describes a table constraint in a CREATE TABLE statement.
 type ConstraintDefinition struct {
-	Name ColIdent
-	Expr Expr
+	Name              ColIdent
+	Expr              Expr
+	ForeignKeyColumns Columns
+	ReferencedTable   TableName
+	ReferencedColumns Columns
+	OnDeleteAction    string
+	OnUpdateAction    string
 }
 
 // Format formats the node.
@@ -1216,7 +1227,18 @@ func (cd *ConstraintDefinition) Format(buf *TrackedBuffer) {
 	if !cd.Name.IsEmpty() {
 		buf.Myprintf("constraint %v ", cd.Name)
 	}
-	buf.Myprintf("check (%v)", cd.Expr)
+	if cd.Expr != nil {
+		buf.Myprintf("check (%v)", cd.Expr)
+		return
+	}
+
+	buf.Myprintf("foreign key %v references %v %v", cd.ForeignKeyColumns, cd.ReferencedTable, cd.ReferencedColumns)
+	if cd.OnDeleteAction != "" {
+		buf.Myprintf(" on delete %s", cd.OnDeleteAction)
+	}
+	if cd.OnUpdateAction != "" {
+		buf.Myprintf(" on update %s", cd.OnUpdateAction)
+	}
 }
 
 func (cd *ConstraintDefinition) walkSubtree(visit Visit) error {
@@ -1227,6 +1249,9 @@ func (cd *ConstraintDefinition) walkSubtree(visit Visit) error {
 		visit,
 		cd.Name,
 		cd.Expr,
+		cd.ForeignKeyColumns,
+		cd.ReferencedTable,
+		cd.ReferencedColumns,
 	)
 }
 

@@ -2051,6 +2051,17 @@ func TestCreateTable(t *testing.T) {
 			"	check (id > 0),\n" +
 			"	constraint id_lt_100 check (id < 100)\n" +
 			")",
+		// foreign key constraints
+		"create table t (\n" +
+			"	id int,\n" +
+			"	parent_id int,\n" +
+			"	constraint fk_parent foreign key (parent_id) references parent (id)\n" +
+			")",
+		"create table t (\n" +
+			"	id int,\n" +
+			"	parent_id int,\n" +
+			"	foreign key (parent_id) references parent (id) on delete set null on update cascade\n" +
+			")",
 
 		// table options
 		"create table t (\n" +
@@ -2121,6 +2132,23 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	invalidForeignKeySQL := []string{
+		// Missing referenced column list after REFERENCES table_name.
+		"create table t (id int, parent_id int, foreign key (parent_id) references parent)",
+		// Referenced columns must be enclosed in parentheses.
+		"create table t (id int, parent_id int, foreign key (parent_id) references parent id)",
+		// ALTER TABLE FK add also requires referenced columns.
+		"alter table t add foreign key (parent_id) references parent",
+		// Local FK columns must appear as a parenthesized list after FOREIGN KEY.
+		"alter table t add foreign key parent_id references parent (id)",
+	}
+	for _, sql := range invalidForeignKeySQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
 	testCases := []struct {
 		input  string
 		output string
@@ -2166,6 +2194,15 @@ func TestCreateTable(t *testing.T) {
 			"\tindex `offset` (`offset`),\n" +
 			"\tkey `view` (`view`)\n" +
 			")",
+	}, {
+		input:  "alter table t add constraint fk_parent foreign key (parent_id) references parent (id)",
+		output: "alter table t add constraint fk_parent foreign key (parent_id) references parent (id)",
+	}, {
+		input:  "alter table t add foreign key (parent_id) references parent (id) on delete set null on update cascade",
+		output: "alter table t add foreign key (parent_id) references parent (id) on delete set null on update cascade",
+	}, {
+		input:  "alter table t drop foreign key fk_parent",
+		output: "alter table t drop foreign key fk_parent",
 	},
 	}
 	for _, tcase := range testCases {

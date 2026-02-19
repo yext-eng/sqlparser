@@ -1965,7 +1965,6 @@ func TestCreateTable(t *testing.T) {
 			"	time3 timestamp(6) on update current_timestamp(6),\n" +
 			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
 			")",
-
 		// test generated columns
 		"create table t (\n" +
 			"	price int,\n" +
@@ -2211,6 +2210,15 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "alter table t drop foreign key fk_parent",
 		output: "alter table t drop foreign key fk_parent",
+	}, {
+		input: "create table t (\n" +
+			"	id bigint(20) unsigned auto_increment not null,\n" +
+			"	id2 bigint(20) unsigned not null auto_increment\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid bigint(20) unsigned not null auto_increment,\n" +
+			"\tid2 bigint(20) unsigned not null auto_increment\n" +
+			")",
 	},
 	}
 	for _, tcase := range testCases {

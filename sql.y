@@ -762,6 +762,16 @@ column_definition:
     $2.Comment = $8
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
+| sql_id column_type auto_increment_opt null_opt column_default_opt on_update_opt column_key_opt column_comment_opt
+  {
+    $2.Autoincrement = $3
+    $2.NotNull = $4
+    $2.Default = $5
+    $2.OnUpdate = $6
+    $2.KeyOpt = $7
+    $2.Comment = $8
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
 | sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
   {
     $2.GeneratedExpr = $7

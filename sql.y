@@ -344,12 +344,15 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
+%type <indexDefinition> alter_index_definition
 %type <constraintDefinition> constraint_definition
 %type <str> index_or_key
+%type <colIdent> index_name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
+%type <indexInfo> alter_index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
@@ -1165,6 +1168,16 @@ index_definition:
     $$ = &IndexDefinition{Info: $1, Columns: $3}
   }
 
+alter_index_definition:
+  alter_index_info '(' index_column_list ')' index_option_list
+  {
+    $$ = &IndexDefinition{Info: $1, Columns: $3, Options: $5}
+  }
+| alter_index_info '(' index_column_list ')'
+  {
+    $$ = &IndexDefinition{Info: $1, Columns: $3}
+  }
+
 constraint_definition:
   CHECK openb expression closeb
   {
@@ -1219,17 +1232,27 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Spatial: true, Unique: false}
   }
-| UNIQUE index_or_key ID
+| UNIQUE index_or_key index_name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent(string($3)), Unique: true}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Unique: true}
   }
 | UNIQUE ID
   {
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: true}
   }
-| index_or_key ID
+| index_or_key index_name_opt
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent(string($2)), Unique: false}
+    $$ = &IndexInfo{Type: string($1), Name: $2, Unique: false}
+  }
+
+alter_index_info:
+  UNIQUE index_or_key index_name_opt
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Unique: true}
+  }
+| index_or_key index_name_opt
+  {
+    $$ = &IndexInfo{Type: string($1), Name: $2, Unique: false}
   }
 
 index_or_key:
@@ -1240,6 +1263,16 @@ index_or_key:
   | KEY
   {
     $$ = string($1)
+  }
+
+index_name_opt:
+  ID
+  {
+    $$ = NewColIdent(string($1))
+  }
+| /* empty */
+  {
+    $$ = NewColIdent("")
   }
 
 index_column_list:
@@ -1313,6 +1346,10 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name ADD openb table_column_list closeb force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, TableSpec: $7}
+  }
+| ALTER ignore_opt TABLE table_name ADD alter_index_definition force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterIndex: $6}
   }
 | ALTER ignore_opt TABLE table_name ADD CONSTRAINT force_eof
   {

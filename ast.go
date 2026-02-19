@@ -977,6 +977,7 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 // OptSelect is set for CREATE TABLE ... AS SELECT statements.
 // TableSpec is set for CREATE TABLE statements, and ALTER TABLE ... ADD (...) statements.
 // AlterConstraint is set for ALTER TABLE ... ADD [CONSTRAINT name] CHECK (...) statements.
+// AlterIndex is set for ALTER TABLE ... ADD [UNIQUE] [KEY|INDEX] [name] (...) statements.
 type DDL struct {
 	Action          string
 	Temporary       bool
@@ -989,6 +990,7 @@ type DDL struct {
 	OptSelect       SelectStatement
 	PartitionSpec   *PartitionSpec
 	AlterConstraint *ConstraintDefinition
+	AlterIndex      *IndexDefinition
 }
 
 // DDL strings.
@@ -1039,6 +1041,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec)
 		} else if node.AlterConstraint != nil {
 			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.AlterConstraint)
+		} else if node.AlterIndex != nil {
+			buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.AlterIndex)
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
@@ -1059,6 +1063,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		node.OptSelect,
 		node.TableSpec,
 		node.AlterConstraint,
+		node.AlterIndex,
 	)
 }
 
@@ -1539,7 +1544,11 @@ func (ii *IndexInfo) Format(buf *TrackedBuffer) {
 	if ii.Primary {
 		buf.Myprintf("%s", ii.Type)
 	} else {
-		buf.Myprintf("%s %v", ii.Type, ii.Name)
+		if ii.Name.IsEmpty() {
+			buf.Myprintf("%s", ii.Type)
+		} else {
+			buf.Myprintf("%s %v", ii.Type, ii.Name)
+		}
 	}
 }
 

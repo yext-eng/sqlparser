@@ -817,7 +817,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a add unique key foo (column1)",
-		output: "alter table a",
+		output: "alter table a add unique key foo (column1)",
 	}, {
 		input:  "alter table `By` add foo",
 		output: "alter table `By`",
@@ -892,7 +892,25 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a add index idx (id)",
-		output: "alter table a",
+		output: "alter table a add index idx (id)",
+	}, {
+		input:  "alter table a add unique key uk_id (id)",
+		output: "alter table a add unique key uk_id (id)",
+	}, {
+		input:  "alter table a add unique index uk_id (id)",
+		output: "alter table a add unique index uk_id (id)",
+	}, {
+		input:  "alter table a add unique key (id)",
+		output: "alter table a add unique key (id)",
+	}, {
+		input:  "alter table a add unique index (id)",
+		output: "alter table a add unique index (id)",
+	}, {
+		input:  "alter table a add key (id)",
+		output: "alter table a add key (id)",
+	}, {
+		input:  "alter table a add unique key (a, b)",
+		output: "alter table a add unique key (a, b)",
 	}, {
 		input:  "alter table a add fulltext index idx (id)",
 		output: "alter table a",
@@ -1951,6 +1969,16 @@ func TestCreateTable(t *testing.T) {
 			"	unique index by_username3 (username),\n" +
 			"	index by_status (status_nonkeyword),\n" +
 			"	key by_full_name (full_name)\n" +
+			")",
+		// test defining indexes separately without index names
+		"create table t (\n" +
+			"	col1 int,\n" +
+			"	col2 int,\n" +
+			"	col3 int,\n" +
+			"	unique key (col1),\n" +
+			"	unique index (col2),\n" +
+			"	key (col3),\n" +
+			"	unique key (col1, col2)\n" +
 			")",
 
 		// test that indexes support USING <id>

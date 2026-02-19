@@ -280,6 +280,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <ins> insert_data
 %type <expr> value value_expression
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
+%type <selectExprs> func_datetime_precision_opt
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
@@ -335,6 +336,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <optVal> length_opt column_default_opt column_comment_opt on_update_opt
+%type <optVal> current_timestamp_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
@@ -1066,9 +1068,9 @@ column_default_opt:
   {
     $$ = NewValArg($2)
   }
-| DEFAULT CURRENT_TIMESTAMP
+| DEFAULT current_timestamp_opt
   {
-    $$ = NewValArg($2)
+    $$ = $2
   }
 | DEFAULT BIT_LITERAL
   {
@@ -1079,10 +1081,33 @@ on_update_opt:
   {
     $$ = nil
   }
-| ON UPDATE CURRENT_TIMESTAMP
+| ON UPDATE current_timestamp_opt
 {
-  $$ = NewValArg($3)
+  $$ = $3
 }
+
+current_timestamp_opt:
+  CURRENT_TIMESTAMP
+  {
+    $$ = NewValArg($1)
+  }
+| CURRENT_TIMESTAMP openb closeb
+  {
+    value := make([]byte, 0, len($1)+2)
+    value = append(value, $1...)
+    value = append(value, '(')
+    value = append(value, ')')
+    $$ = NewValArg(value)
+  }
+| CURRENT_TIMESTAMP openb INTEGRAL closeb
+  {
+    value := make([]byte, 0, len($1)+len($3)+2)
+    value = append(value, $1...)
+    value = append(value, '(')
+    value = append(value, $3...)
+    value = append(value, ')')
+    $$ = NewValArg(value)
+  }
 
 auto_increment_opt:
   {
@@ -2660,44 +2685,54 @@ function_call_keyword:
 function_call_nonkeyword:
   CURRENT_TIMESTAMP func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_timestamp"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("current_timestamp"), Exprs: $2, Over: $3}
   }
 | UTC_TIMESTAMP func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp"), Exprs: $2, Over: $3}
   }
 | UTC_TIME func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_time"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("utc_time"), Exprs: $2, Over: $3}
   }
 | UTC_DATE func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_date"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("utc_date"), Exprs: $2, Over: $3}
   }
   // now
 | LOCALTIME func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtime"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("localtime"), Exprs: $2, Over: $3}
   }
   // now
 | LOCALTIMESTAMP func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtimestamp"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("localtimestamp"), Exprs: $2, Over: $3}
   }
   // curdate
 | CURRENT_DATE func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_date"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("current_date"), Exprs: $2, Over: $3}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision_opt opt_over_clause
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_time"), Over: $3}
+    $$ = &FuncExpr{Name:NewColIdent("current_time"), Exprs: $2, Over: $3}
   }
 
 func_datetime_precision_opt:
   /* empty */
+  {
+    $$ = nil
+  }
 | openb closeb
+  {
+    $$ = nil
+  }
+| openb INTEGRAL closeb
+  {
+    $$ = SelectExprs{&AliasedExpr{Expr: NewIntVal($2)}}
+  }
 
 /*
   Function calls using non reserved keywords with *normal* syntax forms. Because

@@ -1625,6 +1625,18 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input: "update t set a = current_timestamp()",
 	}, {
+		input: "select current_timestamp(6) from t",
+	}, {
+		input: "select current_time(6) from t",
+	}, {
+		input: "select localtimestamp(6) from t",
+	}, {
+		input: "select localtime(6) from t",
+	}, {
+		input: "select utc_time(6), utc_timestamp(6) from t",
+	}, {
+		input: "select now(6), curtime(6), sysdate(6) from t",
+	}, {
 		input:  "select a, current_date from t",
 		output: "select a, current_date() from t",
 	}, {
@@ -1931,6 +1943,8 @@ func TestCreateTable(t *testing.T) {
 			"	s2 varchar default 'this is a string',\n" +
 			"	s3 varchar default null,\n" +
 			"	s4 timestamp default current_timestamp,\n" +
+			"	s7 timestamp default current_timestamp(),\n" +
+			"	s6 timestamp(6) default current_timestamp(6),\n" +
 			"	s5 bit(1) default B'0'\n" +
 			")",
 
@@ -1941,6 +1955,8 @@ func TestCreateTable(t *testing.T) {
 			"	email varchar unique,\n" +
 			"	full_name varchar key,\n" +
 			"	time1 timestamp on update current_timestamp,\n" +
+			"	time4 timestamp on update current_timestamp(),\n" +
+			"	time3 timestamp(6) on update current_timestamp(6),\n" +
 			"	time2 timestamp default current_timestamp on update current_timestamp\n" +
 			")",
 

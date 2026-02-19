@@ -918,6 +918,12 @@ var (
 		input:  "alter table a add unique key (a, b)",
 		output: "alter table a add unique key (a, b)",
 	}, {
+		input:  "alter table a add constraint uk_id unique key (id)",
+		output: "alter table a add unique key uk_id (id)",
+	}, {
+		input:  "alter table a add constraint uk_id unique index (id)",
+		output: "alter table a add unique index uk_id (id)",
+	}, {
 		input:  "alter table a add fulltext index idx (id)",
 		output: "alter table a",
 	}, {
@@ -2193,8 +2199,25 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add (parent_id int references parent)",
 		// Inline referenced columns in ALTER TABLE ... ADD (...) must be enclosed in parentheses.
 		"alter table t add (parent_id int references parent id)",
+		// CONSTRAINT followed by an identifier still requires a valid foreign key body.
+		"create table t (id int, parent_id int, constraint fk_parent key (parent_id) references parent (id))",
+		// ALTER TABLE ... ADD CONSTRAINT also requires a valid foreign key body.
+		"alter table t add constraint fk_parent key (parent_id) references parent (id)",
 	}
 	for _, sql := range invalidForeignKeySQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidAlterAddConstraintUniqueSQL := []string{
+		// Missing index type/body after constraint name.
+		"alter table t add constraint stable_id_uniq unique",
+		// Missing index column list.
+		"alter table t add constraint stable_id_uniq unique key",
+	}
+	for _, sql := range invalidAlterAddConstraintUniqueSQL {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
@@ -2268,6 +2291,38 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "alter table t add constraint fk_parent foreign key (parent_id) references parent (id)",
 		output: "alter table t add constraint fk_parent foreign key (parent_id) references parent (id)",
+	}, {
+		input:  "alter table stable_ids add constraint stable_id_uniq unique key (site_id, document_id, locale, feature, source)",
+		output: "alter table stable_ids add unique key stable_id_uniq (site_id, document_id, locale, feature, source)",
+	}, {
+		input:  "alter table t add constraint foreign key (parent_id) references parent (id)",
+		output: "alter table t add foreign key (parent_id) references parent (id)",
+	}, {
+		input: "create table t (\n" +
+			"	id int,\n" +
+			"	parent_id int,\n" +
+			"	constraint foreign key (parent_id) references parent (id)\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid int,\n" +
+			"\tparent_id int,\n" +
+			"\tforeign key (parent_id) references parent (id)\n" +
+			")",
+	}, {
+		input: "create table t (\n" +
+			"	id int,\n" +
+			"	parent_id int,\n" +
+			"	secondary_parent_id int,\n" +
+			"	constraint foreign key (parent_id) references parent (id),\n" +
+			"	constraint fk_secondary_parent foreign key (secondary_parent_id) references parent (id)\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid int,\n" +
+			"\tparent_id int,\n" +
+			"\tsecondary_parent_id int,\n" +
+			"\tforeign key (parent_id) references parent (id),\n" +
+			"\tconstraint fk_secondary_parent foreign key (secondary_parent_id) references parent (id)\n" +
+			")",
 	}, {
 		input:  "alter table t add foreign key (parent_id) references parent (id) on delete set null on update cascade",
 		output: "alter table t add foreign key (parent_id) references parent (id) on delete set null on update cascade",

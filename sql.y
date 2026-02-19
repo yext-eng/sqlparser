@@ -1236,6 +1236,10 @@ constraint_definition:
     $$ = &ConstraintDefinition{Name: $2, Expr: $5}
   }
 | foreign_key_definition
+| CONSTRAINT foreign_key_definition
+  {
+    $$ = $2
+  }
 | CONSTRAINT sql_id foreign_key_definition
   {
     $3.Name = $2
@@ -1504,6 +1508,13 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name ADD alter_index_definition force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterIndex: $6}
+  }
+| ALTER ignore_opt TABLE table_name ADD CONSTRAINT sql_id alter_index_definition force_eof
+  {
+    if $8 != nil && $8.Info != nil && $8.Info.Name.IsEmpty() {
+      $8.Info.Name = $7
+    }
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterIndex: $8}
   }
 | ALTER ignore_opt TABLE table_name ADD CONSTRAINT force_eof
   {

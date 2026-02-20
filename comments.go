@@ -86,6 +86,31 @@ func trailingCommentStart(text string) (start int) {
 		}
 		reducedLen = nextReducedLen
 		if reducedLen < 4 || text[reducedLen-2:reducedLen] != "*/" {
+			// Try single-line trailing comments (MySQL supports both '-- ' and '#').
+			lineStart := reducedLen - 1
+			for lineStart >= 0 && text[lineStart] != '\n' && text[lineStart] != '\r' {
+				lineStart--
+			}
+			lineStart++
+
+			nextVisibleOffset := strings.IndexFunc(text[lineStart:reducedLen], isNonSpace)
+			if nextVisibleOffset < 0 {
+				break
+			}
+			commentStart := lineStart + nextVisibleOffset
+			remaining := text[commentStart:reducedLen]
+
+			if strings.HasPrefix(remaining, "#") {
+				hasComment = true
+				reducedLen = commentStart
+				continue
+			}
+			if strings.HasPrefix(remaining, "--") &&
+				(len(remaining) == 2 || unicode.IsSpace(rune(remaining[2]))) {
+				hasComment = true
+				reducedLen = commentStart
+				continue
+			}
 			break
 		}
 

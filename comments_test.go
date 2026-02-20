@@ -119,6 +119,16 @@ func TestSplitComments(t *testing.T) {
 		outSQL:              "foo",
 		outLeadingComments:  "",
 		outTrailingComments: "",
+	}, {
+		input:               "   -- only line comment",
+		outSQL:              "",
+		outLeadingComments:  "",
+		outTrailingComments: "-- only line comment",
+	}, {
+		input:               "\n\t # only hash comment",
+		outSQL:              "",
+		outLeadingComments:  "",
+		outTrailingComments: "# only hash comment",
 	}}
 	for _, testCase := range testCases {
 		gotSQL, gotComments := SplitMarginComments(testCase.input)

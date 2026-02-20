@@ -2194,11 +2194,27 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_m drop key idx_c9, modify column c9 varchar(64) not null, add unique (c9)",
 		"alter table tbl_n drop key idx_c10, add constraint primary key (c10), add constraint uq_c11 unique key (c11)",
 		"alter table tbl_j add column c1 int not null, lock=shared",
+		"alter table tbl_pos3 add column col_a int after col_b, lock=shared",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
 		if tree == nil || err != nil {
 			t.Errorf("ParseStrictDDL unexpectedly rejected multi-spec input %s: %v", sql, err)
+		}
+	}
+
+	validAlterTableColumnPositionSQL := []string{
+		"alter table tbl_pos1 add column col_new varchar(64) default null after col_prev",
+		"alter table tbl_pos1 add column col_new int first",
+		"alter table tbl_pos2 add col_new int after col_prev",
+		"alter table `tbl_pos4` add column `col_new` int after `col_prev`",
+		"alter table tbl_pos5 drop key idx_a, modify col_new int after col_prev",
+		"alter table tbl_pos6 add unique (col_a), modify column col_a varchar(16) first",
+	}
+	for _, sql := range validAlterTableColumnPositionSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree == nil || err != nil {
+			t.Errorf("ParseStrictDDL unexpectedly rejected column-position input %s: %v", sql, err)
 		}
 	}
 
@@ -2281,6 +2297,25 @@ func TestCreateTable(t *testing.T) {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted malformed multi-spec input %s", sql)
+		}
+	}
+
+	invalidAlterTableColumnPositionSQL := []string{
+		// AFTER requires a target column identifier.
+		"alter table tbl_pos_bad1 add column col_new int after",
+		// FIRST must not be followed by another identifier.
+		"alter table tbl_pos_bad2 add column col_new int first col_prev",
+		// Only FIRST and AFTER are valid column position clauses.
+		"alter table tbl_pos_bad3 add column col_new int before col_prev",
+		// MODIFY also requires a target column identifier after AFTER.
+		"alter table tbl_pos_bad4 drop key idx_a, modify col_new int after",
+		// FIRST must terminate the MODIFY position clause.
+		"alter table tbl_pos_bad5 drop key idx_a, modify column col_new int first col_prev",
+	}
+	for _, sql := range invalidAlterTableColumnPositionSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted malformed column-position input %s", sql)
 		}
 	}
 

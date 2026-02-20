@@ -203,7 +203,7 @@ type addConstraintObject struct {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD ALGORITHM
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD AFTER ALGORITHM FIRST
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE MODIFY
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -330,7 +330,7 @@ type addConstraintObject struct {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
-%type <empty> alter_table_item alter_table_item_list alter_table_spec alter_table_option
+%type <empty> alter_table_item alter_table_item_list alter_table_spec alter_table_option column_position_opt
 %type <empty> add_column_object
 %type <empty> spatial_or_fulltext
 %type <addConstraintObject> add_constraint_object
@@ -1696,11 +1696,11 @@ alter_table_item_list:
   {
     $$ = struct{}{}
   }
-| alter_table_item ',' MODIFY column_definition
+| alter_table_item ',' MODIFY column_definition column_position_opt
   {
     $$ = struct{}{}
   }
-| alter_table_item ',' MODIFY COLUMN column_definition
+| alter_table_item ',' MODIFY COLUMN column_definition column_position_opt
   {
     $$ = struct{}{}
   }
@@ -1712,11 +1712,11 @@ alter_table_item_list:
   {
     $$ = struct{}{}
   }
-| alter_table_item_list ',' MODIFY column_definition
+| alter_table_item_list ',' MODIFY column_definition column_position_opt
   {
     $$ = struct{}{}
   }
-| alter_table_item_list ',' MODIFY COLUMN column_definition
+| alter_table_item_list ',' MODIFY COLUMN column_definition column_position_opt
   {
     $$ = struct{}{}
   }
@@ -1732,11 +1732,11 @@ alter_table_item:
   }
 
 alter_table_spec:
-  ADD COLUMN column_definition
+  ADD COLUMN column_definition column_position_opt
   {
     $$ = struct{}{}
   }
-| ADD column_definition
+| ADD column_definition column_position_opt
   {
     $$ = struct{}{}
   }
@@ -1757,6 +1757,19 @@ alter_table_spec:
     $$ = struct{}{}
   }
 | RENAME index_opt sql_id TO sql_id
+  {
+    $$ = struct{}{}
+  }
+
+column_position_opt:
+  {
+    $$ = struct{}{}
+  }
+| FIRST
+  {
+    $$ = struct{}{}
+  }
+| AFTER sql_id
   {
     $$ = struct{}{}
   }
@@ -1804,11 +1817,11 @@ alter_add_object_type:
 | UNIQUE
 
 add_column_object:
-  COLUMN column_definition
+  COLUMN column_definition column_position_opt
   {
     $$ = struct{}{}
   }
-| column_definition
+| column_definition column_position_opt
   {
     $$ = struct{}{}
   }
@@ -4110,6 +4123,7 @@ reserved_keyword:
 */
 non_reserved_keyword:
   AGAINST
+| AFTER
 | ALWAYS
 | BEGIN
 | BIGINT
@@ -4131,6 +4145,7 @@ non_reserved_keyword:
 | DUPLICATE
 | ENUM
 | EXPANSION
+| FIRST
 | FLOAT_TYPE
 | FOLLOWING
 | FOREIGN

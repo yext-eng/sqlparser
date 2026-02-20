@@ -209,7 +209,6 @@ type Statement interface {
 
 func (*Union) iStatement()           {}
 func (*Select) iStatement()          {}
-func (*Stream) iStatement()          {}
 func (*Insert) iStatement()          {}
 func (*Update) iStatement()          {}
 func (*Delete) iStatement()          {}
@@ -715,38 +714,11 @@ func (node *Union) walkSubtree(visit Visit) error {
 	)
 }
 
-// Stream represents a SELECT statement.
-type Stream struct {
-	Comments   Comments
-	SelectExpr SelectExpr
-	Table      TableName
-}
-
-// Format formats the node.
-func (node *Stream) Format(buf *TrackedBuffer) {
-	buf.Myprintf("stream %v%v from %v",
-		node.Comments, node.SelectExpr, node.Table)
-}
-
-func (node *Stream) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.SelectExpr,
-		node.Table,
-	)
-}
-
 // Insert represents an INSERT or REPLACE statement.
 // Per the MySQL docs, http://dev.mysql.com/doc/refman/5.7/en/replace.html
 // Replace is the counterpart to `INSERT IGNORE`, and works exactly like a
 // normal INSERT except if the row exists. In that case it first deletes
 // the row and re-inserts with new values. For that reason we keep it as an Insert struct.
-// Replaces are currently disallowed in sharded schemas because
-// of the implications the deletion part may have on vindexes.
 // If you add fields here, consider adding them to calls to validateSubquerySamePlan.
 type Insert struct {
 	With       *With
@@ -2039,7 +2011,6 @@ type SelectExpr interface {
 
 func (*StarExpr) iSelectExpr()    {}
 func (*AliasedExpr) iSelectExpr() {}
-func (Nextval) iSelectExpr()      {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
@@ -2087,20 +2058,6 @@ func (node *AliasedExpr) walkSubtree(visit Visit) error {
 		node.Expr,
 		node.As,
 	)
-}
-
-// Nextval defines the NEXT VALUE expression.
-type Nextval struct {
-	Expr Expr
-}
-
-// Format formats the node.
-func (node Nextval) Format(buf *TrackedBuffer) {
-	buf.Myprintf("next %v values", node.Expr)
-}
-
-func (node Nextval) walkSubtree(visit Visit) error {
-	return Walk(visit, node.Expr)
 }
 
 // Columns represents an insert column list.
@@ -2399,7 +2356,7 @@ func (node TableNames) walkSubtree(visit Visit) error {
 }
 
 // TableName represents a table  name.
-// Qualifier, if specified, represents a database or keyspace.
+// Qualifier, if specified, represents a database.
 // TableName is a value struct whose fields are case sensitive.
 // This means two TableName vars can be compared for equality
 // and a TableName can also be used as key in a map.

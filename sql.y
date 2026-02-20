@@ -352,7 +352,6 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE CHANGE MODIFY
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
 %token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
@@ -4189,9 +4188,8 @@ reserved_keyword:
 | WINDOW
 
 /*
-  These are non-reserved Vitess, because they don't cause conflicts in the grammar.
-  Some of them may be reserved in MySQL. The good news is we backtick quote them
-  when we rewrite the query, so no issue should arise.
+  These are non-reserved keywords in this grammar, because they don't cause conflicts.
+  Some of them may be reserved in MySQL. The parser backtick quotes them when rewriting.
 
   Sorted alphabetically
 */
@@ -4307,7 +4305,6 @@ non_reserved_keyword:
 | VARCHAR
 | VARIABLES
 | VIEW
-| VINDEX
 | VISIBLE
 | VIRTUAL
 | WITH

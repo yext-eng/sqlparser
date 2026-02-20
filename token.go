@@ -403,7 +403,6 @@ var keywords = map[string]int{
 	"varcharacter":        UNUSED,
 	"varying":             UNUSED,
 	"virtual":             VIRTUAL,
-	"vindex":              VINDEX,
 	"visible":             VISIBLE,
 	"view":                VIEW,
 	"window":              WINDOW,

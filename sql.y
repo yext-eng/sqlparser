@@ -75,6 +75,11 @@ func isAllowedGenericShowType(id []byte) bool {
   }
 }
 
+type addConstraintObject struct {
+  Constraint *ConstraintDefinition
+  Index      *IndexDefinition
+}
+
 %}
 
 %union {
@@ -128,6 +133,7 @@ func isAllowedGenericShowType(id []byte) bool {
   referenceDefinition *ReferenceDefinition
   indexDefinition *IndexDefinition
   constraintDefinition *ConstraintDefinition
+  addConstraintObject *addConstraintObject
   indexInfo     *IndexInfo
   indexOption   *IndexOption
   indexOptions  []*IndexOption
@@ -197,9 +203,9 @@ func isAllowedGenericShowType(id []byte) bool {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD ALGORITHM
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE MODIFY
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX
 %token <bytes> STATUS VARIABLES
@@ -324,7 +330,10 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
-%type <empty> alter_index_options_opt alter_index_options alter_index_option
+%type <empty> alter_table_item alter_table_item_list alter_table_spec alter_table_option
+%type <empty> add_column_object
+%type <empty> spatial_or_fulltext
+%type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <with> with_opt with_clause
@@ -1459,7 +1468,11 @@ index_info:
   }
 
 alter_index_info:
-  UNIQUE index_or_key_opt index_name_opt
+  PRIMARY KEY
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+  }
+| UNIQUE index_or_key_opt index_name_opt
   {
     indexType := string($1)
     if $2 != "" {
@@ -1566,26 +1579,35 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD constraint_definition force_eof
+| ALTER ignore_opt TABLE table_name alter_table_item_list force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterConstraint: $6}
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
 | ALTER ignore_opt TABLE table_name ADD openb table_column_list closeb force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, TableSpec: $7}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_index_definition alter_index_options_opt force_eof
+| ALTER ignore_opt TABLE table_name ADD add_column_object force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterIndex: $6}
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD CONSTRAINT sql_id alter_index_definition alter_index_options_opt force_eof
+| ALTER ignore_opt TABLE table_name ADD add_constraint_object force_eof
   {
-    if $8 != nil && $8.Info != nil && $8.Info.Name.IsEmpty() {
-      $8.Info.Name = $7
+    ddl := &DDL{Action: AlterStr, Table: $4, NewName: $4}
+    if $6 != nil {
+      if $6.Constraint != nil {
+        ddl.AlterConstraint = $6.Constraint
+      } else if $6.Index != nil {
+        ddl.AlterIndex = $6.Index
+      }
     }
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterIndex: $8}
+    $$ = ddl
   }
 | ALTER ignore_opt TABLE table_name ADD CONSTRAINT force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name ADD spatial_or_fulltext index_opt sql_id openb force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1601,7 +1623,7 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP index_opt sql_id alter_index_options_opt force_eof
+| ALTER ignore_opt TABLE table_name DROP index_opt sql_id force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
@@ -1627,7 +1649,7 @@ alter_statement:
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_opt sql_id TO sql_id alter_index_options_opt force_eof
+| ALTER ignore_opt TABLE table_name RENAME index_opt sql_id TO sql_id force_eof
   {
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
@@ -1641,44 +1663,96 @@ alter_statement:
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
 
-alter_index_options_opt:
+alter_table_item_list:
+  alter_table_item ',' alter_table_item
   {
     $$ = struct{}{}
   }
-| ',' alter_index_options
+| alter_table_item ',' DROP PRIMARY KEY
+  {
+    $$ = struct{}{}
+  }
+| alter_table_item ',' MODIFY column_definition
+  {
+    $$ = struct{}{}
+  }
+| alter_table_item ',' MODIFY COLUMN column_definition
+  {
+    $$ = struct{}{}
+  }
+| alter_table_item_list ',' alter_table_item
+  {
+    $$ = struct{}{}
+  }
+| alter_table_item_list ',' DROP PRIMARY KEY
+  {
+    $$ = struct{}{}
+  }
+| alter_table_item_list ',' MODIFY column_definition
+  {
+    $$ = struct{}{}
+  }
+| alter_table_item_list ',' MODIFY COLUMN column_definition
   {
     $$ = struct{}{}
   }
 
-alter_index_options:
-  alter_index_option
+alter_table_item:
+  alter_table_spec
   {
     $$ = struct{}{}
   }
-| alter_index_options ',' alter_index_option
+| alter_table_option
   {
     $$ = struct{}{}
   }
 
-alter_index_option:
-  reserved_sql_id equal_opt reserved_sql_id
+alter_table_spec:
+  ADD COLUMN column_definition
   {
-    if $1.EqualString("algorithm") {
-      if !$3.EqualString("default") && !$3.EqualString("instant") && !$3.EqualString("inplace") && !$3.EqualString("copy") {
-        yylex.Error("syntax error")
-        return 1
-      }
-      $$ = struct{}{}
-    } else if $1.EqualString("lock") {
-      if !$3.EqualString("default") && !$3.EqualString("none") && !$3.EqualString("shared") && !$3.EqualString("exclusive") {
-        yylex.Error("syntax error")
-        return 1
-      }
-      $$ = struct{}{}
-    } else {
+    $$ = struct{}{}
+  }
+| ADD column_definition
+  {
+    $$ = struct{}{}
+  }
+| ADD openb table_column_list closeb
+  {
+    $$ = struct{}{}
+  }
+| ADD add_constraint_object
+  {
+    $$ = struct{}{}
+  }
+| DROP index_opt sql_id
+  {
+    $$ = struct{}{}
+  }
+| DROP FOREIGN KEY sql_id
+  {
+    $$ = struct{}{}
+  }
+| RENAME index_opt sql_id TO sql_id
+  {
+    $$ = struct{}{}
+  }
+
+alter_table_option:
+  ALGORITHM equal_opt reserved_sql_id
+  {
+    if !$3.EqualString("default") && !$3.EqualString("instant") && !$3.EqualString("inplace") && !$3.EqualString("copy") {
       yylex.Error("syntax error")
       return 1
     }
+    $$ = struct{}{}
+  }
+| LOCK equal_opt reserved_sql_id
+  {
+    if !$3.EqualString("default") && !$3.EqualString("none") && !$3.EqualString("shared") && !$3.EqualString("exclusive") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = struct{}{}
   }
 
 alter_object_type:
@@ -1695,8 +1769,7 @@ alter_object_type:
 | UNIQUE
 
 alter_add_object_type:
-  COLUMN
-| FOREIGN
+  FOREIGN
 | FULLTEXT
 | ID
 | INDEX
@@ -1705,6 +1778,59 @@ alter_add_object_type:
 | SPATIAL
 | PARTITION
 | UNIQUE
+
+add_column_object:
+  COLUMN column_definition
+  {
+    $$ = struct{}{}
+  }
+| column_definition
+  {
+    $$ = struct{}{}
+  }
+
+add_constraint_object:
+  CONSTRAINT sql_id PRIMARY KEY
+  {
+    $$ = &addConstraintObject{}
+  }
+| CONSTRAINT sql_id alter_index_definition
+  {
+    if $3 != nil && $3.Info != nil && $3.Info.Name.IsEmpty() {
+      $3.Info.Name = $2
+    }
+    $$ = &addConstraintObject{Index: $3}
+  }
+| CONSTRAINT PRIMARY KEY
+  {
+    $$ = &addConstraintObject{}
+  }
+| CONSTRAINT alter_index_definition
+  {
+    $$ = &addConstraintObject{Index: $2}
+  }
+| PRIMARY KEY
+  {
+    $$ = &addConstraintObject{}
+  }
+| alter_index_definition
+  {
+    $$ = &addConstraintObject{Index: $1}
+  }
+| constraint_definition
+  {
+    $$ = &addConstraintObject{Constraint: $1}
+  }
+
+spatial_or_fulltext:
+  SPATIAL
+  {
+    $$ = struct{}{}
+  }
+| FULLTEXT
+  {
+    $$ = struct{}{}
+  }
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -3766,6 +3892,8 @@ non_add_drop_or_rename_operation:
 | DEFAULT
   { $$ = struct{}{} }
 | ORDER
+  { $$ = struct{}{} }
+| MODIFY
   { $$ = struct{}{} }
 | CONVERT
   { $$ = struct{}{} }

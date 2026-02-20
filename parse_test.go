@@ -2160,6 +2160,7 @@ func TestCreateTable(t *testing.T) {
 
 	validAlterTableOptionsSQL := []string{
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace, lock=none",
+		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm inplace, lock none",
 		"alter table tbl_a add constraint uq_ab unique key idx_ab (col_a, col_b), lock=shared",
 		"alter table tbl_a drop index idx_ab, lock=shared",
 		"alter table tbl_a rename index idx_old to idx_new, algorithm=instant",
@@ -2181,6 +2182,23 @@ func TestCreateTable(t *testing.T) {
 		tree, err := ParseStrictDDL(sql)
 		if tree == nil || err != nil {
 			t.Errorf("ParseStrictDDL unexpectedly rejected input %s: %v", sql, err)
+		}
+	}
+
+	validAlterTableMultiSpecSQL := []string{
+		"alter table tbl_b drop index idx_c1, drop primary key, add primary key (c1), add unique key uq_c2_c3 (c2, c3)",
+		"alter table tbl_c add index idx_c1 (c1), drop index idx_c1",
+		"alter table tbl_d add (c4 int), drop foreign key fk_c4",
+		"alter table tbl_h add index idx_c6 (c6), lock shared, algorithm inplace",
+		"alter table tbl_i drop key idx_c7, modify c7 varchar(128) not null, add column c8 binary(16) not null, add unique (c8)",
+		"alter table tbl_m drop key idx_c9, modify column c9 varchar(64) not null, add unique (c9)",
+		"alter table tbl_n drop key idx_c10, add constraint primary key (c10), add constraint uq_c11 unique key (c11)",
+		"alter table tbl_j add column c1 int not null, lock=shared",
+	}
+	for _, sql := range validAlterTableMultiSpecSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree == nil || err != nil {
+			t.Errorf("ParseStrictDDL unexpectedly rejected multi-spec input %s: %v", sql, err)
 		}
 	}
 
@@ -2219,6 +2237,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace, lock=none,",
 		// Unknown alter option key is invalid.
 		"alter table tbl_a add index idx_ab (col_a, col_b), optimizer=instant",
+		// Unknown alter option key is invalid even without '='.
+		"alter table tbl_a add index idx_ab (col_a, col_b), optimizer instant",
 		// LOCK only accepts DEFAULT, NONE, SHARED, or EXCLUSIVE.
 		"alter table tbl_a add index idx_ab (col_a, col_b), lock=fast",
 		// ALGORITHM only accepts DEFAULT, INSTANT, INPLACE, or COPY.
@@ -2228,6 +2248,25 @@ func TestCreateTable(t *testing.T) {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidAlterTableMultiSpecSQL := []string{
+		// Trailing comma after final alter-table item is invalid.
+		"alter table tbl_e drop index idx_c1,",
+		// Empty alter-table item between commas is invalid.
+		"alter table tbl_f drop index idx_c1,, add index idx_c2 (c2)",
+		// Unknown token after comma does not form a valid alter-table item.
+		"alter table tbl_g add index idx_c1 (c1), ???",
+		// MODIFY requires a complete column definition.
+		"alter table tbl_k drop key idx_c1, modify c2",
+		// ADD COLUMN requires a complete column definition.
+		"alter table tbl_l add column",
+	}
+	for _, sql := range invalidAlterTableMultiSpecSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted malformed multi-spec input %s", sql)
 		}
 	}
 

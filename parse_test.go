@@ -813,9 +813,6 @@ var (
 		input:  "alter table a alter foo",
 		output: "alter table a",
 	}, {
-		input:  "alter table a change foo",
-		output: "alter table a",
-	}, {
 		input:  "alter table a disable foo",
 		output: "alter table a",
 	}, {
@@ -1479,6 +1476,7 @@ func TestMySQL80RemovedSyntaxInvalid(t *testing.T) {
 		"alter table tbl_incomplete add id",
 		"alter table tbl_incomplete modify col_a",
 		"alter table tbl_incomplete modify column col_a",
+		"alter table tbl_incomplete change foo",
 		"alter table tbl_incomplete drop foreign key",
 		"alter table tbl_incomplete drop constraint",
 		"alter table tbl_incomplete rename key",
@@ -2157,6 +2155,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_n drop key idx_c10, add constraint primary key (c10), add constraint uq_c11 unique key (c11)",
 		"alter table tbl_j add column c1 int not null, lock=shared",
 		"alter table tbl_pos3 add column col_a int after col_b, lock=shared",
+		"alter table tbl_chg1 drop column col_old, change col_id col_uid varchar(26) not null",
+		"alter table tbl_chg2 change column col_a col_b int null default null, change col_c col_d varchar(64) not null",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2260,6 +2260,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_l add column",
 		// DROP COLUMN requires a column identifier.
 		"alter table tbl_l2 drop column",
+		// CHANGE requires old name, new name, and a full column definition.
+		"alter table tbl_l3 change column col_old col_new",
 	}
 	for _, sql := range invalidAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)

@@ -205,7 +205,7 @@ type addConstraintObject struct {
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD AFTER ALGORITHM FIRST
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE MODIFY
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE CHANGE MODIFY
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX
 %token <bytes> STATUS VARIABLES
@@ -330,7 +330,7 @@ type addConstraintObject struct {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
-%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option column_position_opt
+%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option change_column_definition column_position_opt
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -1717,7 +1717,33 @@ alter_table_spec:
   {
     $$ = struct{}{}
   }
+| CHANGE COLUMN sql_id sql_id change_column_definition column_position_opt
+  {
+    $$ = struct{}{}
+  }
+| CHANGE sql_id sql_id change_column_definition column_position_opt
+  {
+    $$ = struct{}{}
+  }
 | RENAME index_opt sql_id TO sql_id
+  {
+    $$ = struct{}{}
+  }
+
+change_column_definition:
+  column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt reference_definition_opt
+  {
+    $$ = struct{}{}
+  }
+| column_type auto_increment_opt null_opt column_default_opt on_update_opt column_key_opt column_comment_opt reference_definition_opt
+  {
+    $$ = struct{}{}
+  }
+| column_type null_opt column_default_opt on_update_opt PRIMARY KEY auto_increment_opt column_comment_opt reference_definition_opt
+  {
+    $$ = struct{}{}
+  }
+| column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
   {
     $$ = struct{}{}
   }
@@ -3936,6 +3962,7 @@ reserved_keyword:
 | BY
 | CASCADE
 | CASE
+| CHANGE
 | CHECK
 | COLLATE
 | CONVERT

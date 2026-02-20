@@ -1079,25 +1079,49 @@ column_default_opt:
   {
     $$ = NewStrVal($2)
   }
+| DEFAULT openb STRING closeb
+  {
+    $$ = NewStrVal($3)
+  }
 | DEFAULT INTEGRAL
   {
     $$ = NewIntVal($2)
+  }
+| DEFAULT openb INTEGRAL closeb
+  {
+    $$ = NewIntVal($3)
   }
 | DEFAULT FLOAT
   {
     $$ = NewFloatVal($2)
   }
+| DEFAULT openb FLOAT closeb
+  {
+    $$ = NewFloatVal($3)
+  }
 | DEFAULT NULL
   {
     $$ = NewValArg($2)
+  }
+| DEFAULT openb NULL closeb
+  {
+    $$ = NewValArg($3)
   }
 | DEFAULT current_timestamp_opt
   {
     $$ = $2
   }
+| DEFAULT openb current_timestamp_opt closeb
+  {
+    $$ = $3
+  }
 | DEFAULT BIT_LITERAL
   {
     $$ = NewBitVal($2)
+  }
+| DEFAULT openb BIT_LITERAL closeb
+  {
+    $$ = NewBitVal($3)
   }
 
 on_update_opt:

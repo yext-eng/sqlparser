@@ -2243,6 +2243,20 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	invalidParenthesizedDefaultExprSQL := []string{
+		// Parenthesized defaults are supported for literals, not arbitrary expressions.
+		"create table t (id int default (1 + 1))",
+		"create table t (config json default (json_object()))",
+		"alter table t add (id int default (1 + 1))",
+		"alter table t add (config json default (json_object()))",
+	}
+	for _, sql := range invalidParenthesizedDefaultExprSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
 	testCases := []struct {
 		input  string
 		output string
@@ -2265,6 +2279,30 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "CREATE TEMPORARY TABLE IF NOT EXISTS t LIKE src",
 		output: "create temporary table if not exists t like src",
+	}, {
+		input: "create table t (\n" +
+			"	id bigint(20) unsigned not null auto_increment,\n" +
+			"	j json not null default ('{}'),\n" +
+			"	i tinyint(1) not null default (1),\n" +
+			"	ts timestamp(3) not null default (current_timestamp)\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid bigint(20) unsigned not null auto_increment,\n" +
+			"\tj json not null default '{}',\n" +
+			"\ti tinyint(1) not null default 1,\n" +
+			"\tts timestamp(3) not null default current_timestamp\n" +
+			")",
+	}, {
+		input: "alter table t add (\n" +
+			"	j json not null default ('{}'),\n" +
+			"	i tinyint(1) not null default (1),\n" +
+			"	ts timestamp(3) not null default (current_timestamp)\n" +
+			")",
+		output: "alter table t add (\n" +
+			"\tj json not null default '{}',\n" +
+			"\ti tinyint(1) not null default 1,\n" +
+			"\tts timestamp(3) not null default current_timestamp\n" +
+			")",
 	}, {
 		input: "create table t (\n" +
 			"	status int,\n" +

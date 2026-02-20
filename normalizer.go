@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/yext/sqlparser/dependency/sqltypes"
@@ -182,6 +183,14 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 			v, err = sqltypes.NewValue(sqltypes.Int64, node.Val)
 		case FloatVal:
 			v, err = sqltypes.NewValue(sqltypes.Float64, node.Val)
+		case BoolSQLVal:
+			if bytes.EqualFold(node.Val, []byte("true")) {
+				v, err = sqltypes.NewValue(sqltypes.Int64, []byte("1"))
+			} else if bytes.EqualFold(node.Val, []byte("false")) {
+				v, err = sqltypes.NewValue(sqltypes.Int64, []byte("0"))
+			} else {
+				return nil
+			}
 		default:
 			return nil
 		}

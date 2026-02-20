@@ -842,6 +842,14 @@ int_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
+| BOOL
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
+| BOOLEAN
+  {
+    $$ = ColumnType{Type: string($1)}
+  }
 | TINYINT
   {
     $$ = ColumnType{Type: string($1)}
@@ -1151,6 +1159,22 @@ column_default_opt:
 | DEFAULT openb BIT_LITERAL closeb
   {
     $$ = NewBitVal($3)
+  }
+| DEFAULT TRUE
+  {
+    $$ = NewBoolVal(true)
+  }
+| DEFAULT openb TRUE closeb
+  {
+    $$ = NewBoolVal(true)
+  }
+| DEFAULT FALSE
+  {
+    $$ = NewBoolVal(false)
+  }
+| DEFAULT openb FALSE closeb
+  {
+    $$ = NewBoolVal(false)
   }
 
 on_update_opt:

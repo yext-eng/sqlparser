@@ -173,7 +173,7 @@ func IsValue(node Expr) bool {
 	switch v := node.(type) {
 	case *SQLVal:
 		switch v.Type {
-		case StrVal, HexVal, IntVal, ValArg:
+		case StrVal, HexVal, IntVal, BoolSQLVal, ValArg:
 			return true
 		}
 	}
@@ -216,6 +216,15 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
 		case IntVal:
 			n, err := sqltypes.NewIntegral(string(node.Val))
+			if err != nil {
+				return sqltypes.PlanValue{}, fmt.Errorf("%v", err)
+			}
+			return sqltypes.PlanValue{Value: n}, nil
+		case BoolSQLVal:
+			n, err := sqltypes.NewIntegral("0")
+			if strings.EqualFold(string(node.Val), "true") {
+				n, err = sqltypes.NewIntegral("1")
+			}
 			if err != nil {
 				return sqltypes.PlanValue{}, fmt.Errorf("%v", err)
 			}
@@ -320,6 +329,14 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 					return nil, "", err
 				}
 				result[setKey] = num
+			case BoolSQLVal:
+				if strings.EqualFold(string(expr.Val), "true") {
+					result[setKey] = int64(1)
+				} else if strings.EqualFold(string(expr.Val), "false") {
+					result[setKey] = int64(0)
+				} else {
+					return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
+				}
 			default:
 				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
 			}

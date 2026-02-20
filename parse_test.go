@@ -2202,6 +2202,20 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	validBooleanColumnDDL := []string{
+		"alter table tbl_bool add col_flag boolean not null default false",
+		"alter table tbl_bool add col_toggle bool default true",
+		"alter table tbl_bool add col_enabled boolean default (true)",
+		"alter table tbl_bool add col_disabled bool default (false)",
+		"create table tbl_bool_create (col_flag boolean not null default false, col_toggle bool default true)",
+	}
+	for _, sql := range validBooleanColumnDDL {
+		tree, err := ParseStrictDDL(sql)
+		if tree == nil || err != nil {
+			t.Errorf("ParseStrictDDL unexpectedly rejected boolean column DDL %s: %v", sql, err)
+		}
+	}
+
 	sql := "create table t garbage"
 	tree, err := Parse(sql)
 	if err != nil {
@@ -2358,6 +2372,23 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	invalidBooleanDefaultSQL := []string{
+		// DEFAULT accepts TRUE/FALSE literals only, not boolean expressions.
+		"create table t (b boolean default (true and false))",
+		// NOT TRUE is valid in IS predicates, not as a DEFAULT literal.
+		"create table t (b boolean default (not true))",
+		// DEFAULT must have exactly one literal value.
+		"create table t (b boolean default false true)",
+		// ADD COLUMN follows the same DEFAULT literal restrictions as CREATE TABLE.
+		"alter table t add (b bool default (true or false))",
+	}
+	for _, sql := range invalidBooleanDefaultSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
 	testCases := []struct {
 		input  string
 		output string
@@ -2403,6 +2434,15 @@ func TestCreateTable(t *testing.T) {
 			"\tj json not null default '{}',\n" +
 			"\ti tinyint(1) not null default 1,\n" +
 			"\tts timestamp(3) not null default current_timestamp\n" +
+			")",
+	}, {
+		input: "create table t (\n" +
+			"	b0 boolean default (true),\n" +
+			"	b1 bool default false\n" +
+			")",
+		output: "create table t (\n" +
+			"\tb0 boolean default true,\n" +
+			"\tb1 bool default false\n" +
 			")",
 	}, {
 		input: "create table t (\n" +

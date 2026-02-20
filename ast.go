@@ -1338,7 +1338,7 @@ type ColumnType struct {
 	Autoincrement BoolVal
 	// Visibility is either "visible" or "invisible" when specified.
 	Visibility    string
-	Default       *SQLVal
+	Default       Expr
 	OnUpdate      *SQLVal
 	Comment       *SQLVal
 	GeneratedExpr Expr
@@ -1567,7 +1567,7 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 	if ct == nil {
 		return nil
 	}
-	return Walk(visit, ct.GeneratedExpr, ct.Reference)
+	return Walk(visit, ct.Default, ct.OnUpdate, ct.GeneratedExpr, ct.Reference)
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

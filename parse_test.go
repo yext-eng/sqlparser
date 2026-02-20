@@ -2198,6 +2198,11 @@ func TestCreateTable(t *testing.T) {
 		"create table tbl_bool_create (col_flag boolean not null default false, col_toggle bool default true)",
 		"create table tbl_attr_create (col_flag int default 0 not null, col_ts timestamp default current_timestamp not null on update current_timestamp)",
 		"create table tbl_vis_create (col_a int invisible, col_b int default 1 visible)",
+		"alter table tbl_time_a modify column col_ts timestamp(3) not null default now(3)",
+		"alter table tbl_time_b modify column col_ts timestamp(3) not null default localtime(3)",
+		"alter table tbl_time_c modify column col_ts timestamp(3) not null default localtimestamp(3)",
+		"alter table tbl_expr_a add column col_val int default (1 + 1)",
+		"create table tbl_expr_b (col_val int default (1 + 1), col_fn int default (coalesce(1, 2)))",
 	}
 	for _, sql := range validBooleanColumnDDL {
 		tree, err := ParseStrictDDL(sql)
@@ -2392,14 +2397,14 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
-	invalidParenthesizedDefaultExprSQL := []string{
-		// Parenthesized defaults are supported for literals, not arbitrary expressions.
-		"create table t (id int default (1 + 1))",
-		"create table t (config json default (json_object()))",
-		"alter table t add (id int default (1 + 1))",
-		"alter table t add (config json default (json_object()))",
+	invalidDefaultExprSQL := []string{
+		// DEFAULT expression must be syntactically complete.
+		"create table t (id int default (1 +))",
+		"create table t (id int default ())",
+		"alter table t add (id int default (coalesce(1, 2)) default 3)",
+		"alter table t add (id int default (coalesce(1, 2))",
 	}
-	for _, sql := range invalidParenthesizedDefaultExprSQL {
+	for _, sql := range invalidDefaultExprSQL {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
@@ -2407,14 +2412,10 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	invalidBooleanDefaultSQL := []string{
-		// DEFAULT accepts TRUE/FALSE literals only, not boolean expressions.
-		"create table t (b boolean default (true and false))",
-		// NOT TRUE is valid in IS predicates, not as a DEFAULT literal.
-		"create table t (b boolean default (not true))",
-		// DEFAULT must have exactly one literal value.
+		// DEFAULT must be a single expression.
 		"create table t (b boolean default false true)",
-		// ADD COLUMN follows the same DEFAULT literal restrictions as CREATE TABLE.
-		"alter table t add (b bool default (true or false))",
+		// Missing closing parenthesis.
+		"alter table t add (b bool default (true or false)",
 	}
 	for _, sql := range invalidBooleanDefaultSQL {
 		tree, err := ParseStrictDDL(sql)

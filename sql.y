@@ -83,7 +83,7 @@ type addConstraintObject struct {
 type columnAttrSet struct {
   NotNullSet       bool
   NotNull          BoolVal
-  Default          *SQLVal
+  Default          Expr
   OnUpdate         *SQLVal
   AutoIncrementSet bool
   AutoIncrement    BoolVal
@@ -188,6 +188,35 @@ func applyColumnAttrSet(colType ColumnType, attrs *columnAttrSet) ColumnType {
     colType.Reference = attrs.Reference
   }
   return colType
+}
+
+func normalizeDefaultExpr(expr Expr) Expr {
+  if expr == nil {
+    return nil
+  }
+  if fn, ok := expr.(*FuncExpr); ok && fn != nil {
+    lowered := fn.Name.Lowered()
+    if lowered == "current_timestamp" && fn.Qualifier.IsEmpty() && !fn.Distinct && fn.Exprs == nil && fn.Over == nil {
+      return NewValArg([]byte("current_timestamp"))
+    }
+    return expr
+  }
+  paren, ok := expr.(*ParenExpr)
+  if !ok || paren == nil {
+    return expr
+  }
+  switch inner := paren.Expr.(type) {
+  case *SQLVal, *NullVal, BoolVal:
+    return inner
+  case *FuncExpr:
+    lowered := inner.Name.Lowered()
+    if lowered == "current_timestamp" && inner.Qualifier.IsEmpty() && !inner.Distinct && len(inner.Exprs) == 0 && inner.Over == nil {
+      return NewValArg([]byte("current_timestamp"))
+    }
+    return expr
+  default:
+    return expr
+  }
 }
 
 %}
@@ -458,7 +487,8 @@ func applyColumnAttrSet(colType ColumnType, attrs *columnAttrSet) ColumnType {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <optVal> length_opt column_default_attr column_comment_attr column_comment_opt on_update_column_attr
+%type <optVal> length_opt column_comment_attr column_comment_opt on_update_column_attr
+%type <expr> column_default_attr
 %type <optVal> current_timestamp_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
@@ -1234,69 +1264,9 @@ null_attr:
   }
 
 column_default_attr:
-  DEFAULT STRING
+  DEFAULT value_expression
   {
-    $$ = NewStrVal($2)
-  }
-| DEFAULT openb STRING closeb
-  {
-    $$ = NewStrVal($3)
-  }
-| DEFAULT INTEGRAL
-  {
-    $$ = NewIntVal($2)
-  }
-| DEFAULT openb INTEGRAL closeb
-  {
-    $$ = NewIntVal($3)
-  }
-| DEFAULT FLOAT
-  {
-    $$ = NewFloatVal($2)
-  }
-| DEFAULT openb FLOAT closeb
-  {
-    $$ = NewFloatVal($3)
-  }
-| DEFAULT NULL
-  {
-    $$ = NewValArg($2)
-  }
-| DEFAULT openb NULL closeb
-  {
-    $$ = NewValArg($3)
-  }
-| DEFAULT current_timestamp_opt
-  {
-    $$ = $2
-  }
-| DEFAULT openb current_timestamp_opt closeb
-  {
-    $$ = $3
-  }
-| DEFAULT BIT_LITERAL
-  {
-    $$ = NewBitVal($2)
-  }
-| DEFAULT openb BIT_LITERAL closeb
-  {
-    $$ = NewBitVal($3)
-  }
-| DEFAULT TRUE
-  {
-    $$ = NewBoolVal(true)
-  }
-| DEFAULT openb TRUE closeb
-  {
-    $$ = NewBoolVal(true)
-  }
-| DEFAULT FALSE
-  {
-    $$ = NewBoolVal(false)
-  }
-| DEFAULT openb FALSE closeb
-  {
-    $$ = NewBoolVal(false)
+    $$ = normalizeDefaultExpr($2)
   }
 
 on_update_column_attr:
@@ -3342,7 +3312,7 @@ func_datetime_precision_opt:
   }
 | openb closeb
   {
-    $$ = nil
+    $$ = SelectExprs{}
   }
 | openb INTEGRAL closeb
   {

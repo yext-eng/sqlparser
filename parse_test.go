@@ -2143,6 +2143,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add constraint uq_ab unique key idx_ab (col_a, col_b), lock=shared",
 		"alter table tbl_a drop index idx_ab, lock=shared",
 		"alter table tbl_a rename index idx_old to idx_new, algorithm=instant",
+		"alter table tbl_a rename column col_old to col_new, algorithm=instant, lock=none",
 	}
 	for _, sql := range validAlterTableOptionsSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2177,6 +2178,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_pos3 add column col_a int after col_b, lock=shared",
 		"alter table tbl_chg1 drop column col_old, change col_id col_uid varchar(26) not null",
 		"alter table tbl_chg2 change column col_a col_b int null default null, change col_c col_d varchar(64) not null",
+		"alter table tbl_ren1 rename column col_a to col_b",
+		"alter table tbl_ren2 add column col_c int null, rename column col_a to col_b",
 		"alter table tbl_attr_a add column col_a int default 0 not null",
 		"alter table tbl_attr_b modify column col_b int default 0 not null",
 		"alter table tbl_attr_c change column col_old col_new int default 0 not null",
@@ -2295,6 +2298,10 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_l2 drop column",
 		// CHANGE requires old name, new name, and a full column definition.
 		"alter table tbl_l3 change column col_old col_new",
+		// RENAME COLUMN requires both old and new identifiers.
+		"alter table tbl_l4 add column col_a int, rename column col_b to",
+		// RENAME COLUMN requires the TO keyword.
+		"alter table tbl_l5 add column col_a int, rename column col_b col_c",
 	}
 	for _, sql := range invalidAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2316,6 +2323,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_incomplete drop foreign key",
 		"alter table tbl_incomplete drop constraint",
 		"alter table tbl_incomplete rename key",
+		"alter table tbl_incomplete rename column",
+		"alter table tbl_incomplete rename column col_a",
+		"alter table tbl_incomplete rename column col_a to",
 		"alter table tbl_incomplete drop",
 	}
 	for _, sql := range invalidAlterTableIncompleteSQL {
@@ -2650,6 +2660,12 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "alter table t drop foreign key fk_parent",
 		output: "alter table t drop foreign key fk_parent",
+	}, {
+		input:  "ALTER TABLE tbl_norm_a RENAME COLUMN col_src TO col_dst",
+		output: "alter table tbl_norm_a",
+	}, {
+		input:  "ALTER TABLE `tbl_norm_b` ADD COLUMN `col_new` INT NULL, RENAME COLUMN `col_old` TO `col_now`, LOCK=NONE",
+		output: "alter table tbl_norm_b",
 	}, {
 		input: "create table t (\n" +
 			"	id bigint(20) unsigned auto_increment not null,\n" +

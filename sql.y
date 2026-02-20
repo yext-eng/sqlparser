@@ -475,7 +475,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
-%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option change_column_definition column_position_opt
+%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec change_column_definition column_position_opt
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -1853,7 +1853,17 @@ alter_table_spec:
   {
     $$ = struct{}{}
   }
-| RENAME index_opt sql_id TO sql_id
+| alter_table_rename_spec
+  {
+    $$ = struct{}{}
+  }
+
+alter_table_rename_spec:
+  RENAME index_opt sql_id TO sql_id
+  {
+    $$ = struct{}{}
+  }
+| RENAME COLUMN sql_id TO sql_id
   {
     $$ = struct{}{}
   }

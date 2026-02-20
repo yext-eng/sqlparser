@@ -331,7 +331,6 @@ type addConstraintObject struct {
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option column_position_opt
-%type <empty> spatial_or_fulltext
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -373,6 +372,7 @@ type addConstraintObject struct {
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexInfo> alter_index_info
+%type <bytes> index_kind
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
@@ -382,7 +382,6 @@ type addConstraintObject struct {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation partition_opt
-%type <bytes> alter_object_type alter_add_object_type
 
 %start any_command
 
@@ -1473,9 +1472,9 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| SPATIAL index_or_key sql_id
+| index_kind index_or_key sql_id
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Spatial: true, Unique: false}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Spatial: strings.EqualFold(string($1), "spatial"), Unique: false}
   }
 | UNIQUE index_or_key_opt index_name_opt
   {
@@ -1494,6 +1493,10 @@ alter_index_info:
   PRIMARY KEY
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+  }
+| index_kind index_or_key sql_id
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: $3, Spatial: strings.EqualFold(string($1), "spatial"), Unique: false}
   }
 | UNIQUE index_or_key_opt index_name_opt
   {
@@ -1516,6 +1519,16 @@ index_or_key:
   | KEY
   {
     $$ = string($1)
+  }
+
+index_kind:
+  FULLTEXT
+  {
+    $$ = $1
+  }
+| SPATIAL
+  {
+    $$ = $1
   }
 
 index_or_key_opt:
@@ -1613,46 +1626,6 @@ alter_statement:
     }
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name ADD CONSTRAINT force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name ADD spatial_or_fulltext index_opt sql_id openb force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name ADD FOREIGN KEY force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name ADD alter_add_object_type force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name DROP index_opt sql_id openb force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name DROP FOREIGN KEY force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name MODIFY ddl_force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name MODIFY COLUMN ddl_force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
@@ -1719,6 +1692,14 @@ alter_table_spec:
   {
     $$ = struct{}{}
   }
+| DROP COLUMN sql_id
+  {
+    $$ = struct{}{}
+  }
+| DROP sql_id
+  {
+    $$ = struct{}{}
+  }
 | DROP FOREIGN KEY sql_id
   {
     setDDL(yylex, &DDL{AlterDropForeignKey: $4})
@@ -1772,30 +1753,6 @@ alter_table_option:
     $$ = struct{}{}
   }
 
-alter_object_type:
-  COLUMN
-| CONSTRAINT
-| FOREIGN
-| FULLTEXT
-| ID
-| INDEX
-| KEY
-| PRIMARY
-| SPATIAL
-| PARTITION
-| UNIQUE
-
-alter_add_object_type:
-  FOREIGN
-| FULLTEXT
-| ID
-| INDEX
-| KEY
-| PRIMARY
-| SPATIAL
-| PARTITION
-| UNIQUE
-
 add_constraint_object:
   CONSTRAINT sql_id PRIMARY KEY
   {
@@ -1827,16 +1784,6 @@ add_constraint_object:
 | constraint_definition
   {
     $$ = &addConstraintObject{Constraint: $1}
-  }
-
-spatial_or_fulltext:
-  SPATIAL
-  {
-    $$ = struct{}{}
-  }
-| FULLTEXT
-  {
-    $$ = struct{}{}
   }
 
 partition_operation:

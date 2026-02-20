@@ -807,31 +807,13 @@ var (
 	}, {
 		input: "set sql_safe_updates = 1",
 	}, {
-		input:  "alter ignore table a add foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add spatial key foo (column1)",
-		output: "alter table a",
-	}, {
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a add unique key foo (column1)",
-	}, {
-		input:  "alter table `By` add foo",
-		output: "alter table `By`",
 	}, {
 		input:  "alter table a alter foo",
 		output: "alter table a",
 	}, {
 		input:  "alter table a change foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a modify foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop foo",
 		output: "alter table a",
 	}, {
 		input:  "alter table a disable foo",
@@ -924,11 +906,11 @@ var (
 		input:  "alter table a add constraint uk_id unique index (id)",
 		output: "alter table a add unique index uk_id (id)",
 	}, {
-		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a",
+		input:  "alter table a add fulltext index idx_ft (id)",
+		output: "alter table a add fulltext index idx_ft (id)",
 	}, {
-		input:  "alter table a add spatial index idx (id)",
-		output: "alter table a",
+		input:  "alter table a add spatial index idx_sp (id)",
+		output: "alter table a add spatial index idx_sp (id)",
 	}, {
 		input:  "alter table a add check (id > 0)",
 		output: "alter table a add check (id > 0)",
@@ -943,43 +925,7 @@ var (
 			"\tconstraint id2_positive check (id2 > 0)\n" +
 			")",
 	}, {
-		input:  "alter table a add foreign key",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add primary key",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add constraint",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add id",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop column id int",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop partition p2712",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop fulltext index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop spatial index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop foreign key",
-		output: "alter table a",
-	}, {
 		input:  "alter table a drop primary key",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop constraint",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
 		input: "create table a",
@@ -1002,6 +948,12 @@ var (
 		output: "create temporary table if not exists a (\n\ta int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
+	}, {
+		input:  "create table t_fulltext (\n\tc1 text,\n\tfulltext key idx_ft (c1)\n)",
+		output: "create table t_fulltext (\n\tc1 text,\n\tfulltext key idx_ft (c1)\n)",
+	}, {
+		input:  "create table t_spatial (\n\tc1 geometry,\n\tspatial key idx_sp (c1)\n)",
+		output: "create table t_spatial (\n\tc1 geometry,\n\tspatial key idx_sp (c1)\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table if not exists a (\n\ta int\n)",
@@ -1521,6 +1473,15 @@ func TestMySQL80RemovedSyntaxInvalid(t *testing.T) {
 		"set session tx_isolation = 'repeatable read'",
 		"set session tx_read_only = 1",
 		"set @@session.'autocommit' = true",
+		"alter table tbl_incomplete add constraint",
+		"alter table tbl_incomplete add foreign key",
+		"alter table tbl_incomplete add primary",
+		"alter table tbl_incomplete add id",
+		"alter table tbl_incomplete modify col_a",
+		"alter table tbl_incomplete modify column col_a",
+		"alter table tbl_incomplete drop foreign key",
+		"alter table tbl_incomplete drop constraint",
+		"alter table tbl_incomplete rename key",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {
@@ -2188,6 +2149,7 @@ func TestCreateTable(t *testing.T) {
 	validAlterTableMultiSpecSQL := []string{
 		"alter table tbl_b drop index idx_c1, drop primary key, add primary key (c1), add unique key uq_c2_c3 (c2, c3)",
 		"alter table tbl_c add index idx_c1 (c1), drop index idx_c1",
+		"alter table tbl_c2 drop column c2",
 		"alter table tbl_d add (c4 int), drop foreign key fk_c4",
 		"alter table tbl_h add index idx_c6 (c6), lock shared, algorithm inplace",
 		"alter table tbl_i drop key idx_c7, modify c7 varchar(128) not null, add column c8 binary(16) not null, add unique (c8)",
@@ -2210,6 +2172,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table `tbl_pos4` add column `col_new` int after `col_prev`",
 		"alter table tbl_pos4 modify col_new int after col_prev",
 		"alter table tbl_pos4 modify column col_new int first",
+		"alter table tbl_pos4 drop column col_new",
+		"alter table tbl_pos4 drop col_new",
 		"alter table tbl_pos5 drop key idx_a, modify col_new int after col_prev",
 		"alter table tbl_pos6 add unique (col_a), modify column col_a varchar(16) first",
 	}
@@ -2294,11 +2258,32 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_k drop key idx_c1, modify c2",
 		// ADD COLUMN requires a complete column definition.
 		"alter table tbl_l add column",
+		// DROP COLUMN requires a column identifier.
+		"alter table tbl_l2 drop column",
 	}
 	for _, sql := range invalidAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted malformed multi-spec input %s", sql)
+		}
+	}
+
+	invalidAlterTableIncompleteSQL := []string{
+		"alter table tbl_incomplete add constraint",
+		"alter table tbl_incomplete add foreign key",
+		"alter table tbl_incomplete add primary",
+		"alter table tbl_incomplete add id",
+		"alter table tbl_incomplete modify col_a",
+		"alter table tbl_incomplete modify column col_a",
+		"alter table tbl_incomplete drop foreign key",
+		"alter table tbl_incomplete drop constraint",
+		"alter table tbl_incomplete rename key",
+		"alter table tbl_incomplete drop",
+	}
+	for _, sql := range invalidAlterTableIncompleteSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted incomplete alter-table input %s", sql)
 		}
 	}
 

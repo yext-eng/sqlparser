@@ -2157,6 +2157,12 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_pos3 add column col_a int after col_b, lock=shared",
 		"alter table tbl_chg1 drop column col_old, change col_id col_uid varchar(26) not null",
 		"alter table tbl_chg2 change column col_a col_b int null default null, change col_c col_d varchar(64) not null",
+		"alter table tbl_attr_a add column col_a int default 0 not null",
+		"alter table tbl_attr_b modify column col_b int default 0 not null",
+		"alter table tbl_attr_c change column col_old col_new int default 0 not null",
+		"alter table tbl_vis_a add column col_a int invisible",
+		"alter table tbl_vis_b modify column col_b int visible not null default 0",
+		"alter table tbl_vis_c change column col_old col_new int default 1 invisible",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2190,6 +2196,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_bool add col_enabled boolean default (true)",
 		"alter table tbl_bool add col_disabled bool default (false)",
 		"create table tbl_bool_create (col_flag boolean not null default false, col_toggle bool default true)",
+		"create table tbl_attr_create (col_flag int default 0 not null, col_ts timestamp default current_timestamp not null on update current_timestamp)",
+		"create table tbl_vis_create (col_a int invisible, col_b int default 1 visible)",
 	}
 	for _, sql := range validBooleanColumnDDL {
 		tree, err := ParseStrictDDL(sql)
@@ -2409,6 +2417,23 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add (b bool default (true or false))",
 	}
 	for _, sql := range invalidBooleanDefaultSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidColumnAttributeDupSQL := []string{
+		"alter table tbl_attr_bad1 add column col_a int default 1 default 2",
+		"alter table tbl_attr_bad2 add column col_a int null not null",
+		"alter table tbl_attr_bad3 modify column col_a int auto_increment auto_increment",
+		"alter table tbl_attr_bad4 change column col_a col_b int comment 'a' comment 'b'",
+		"create table tbl_attr_bad5 (col_a int references tbl_ref_a (id_a) references tbl_ref_b (id_b))",
+		"alter table tbl_attr_bad6 add column col_a int visible invisible",
+		"alter table tbl_attr_bad7 add column col_a int invisible visible",
+		"create table tbl_attr_bad8 (col_a int visible visible)",
+	}
+	for _, sql := range invalidColumnAttributeDupSQL {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)

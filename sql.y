@@ -80,6 +80,116 @@ type addConstraintObject struct {
   Index      *IndexDefinition
 }
 
+type columnAttrSet struct {
+  NotNullSet       bool
+  NotNull          BoolVal
+  Default          *SQLVal
+  OnUpdate         *SQLVal
+  AutoIncrementSet bool
+  AutoIncrement    BoolVal
+  VisibilitySet    bool
+  Visibility       string
+  KeyOptSet        bool
+  KeyOpt           ColumnKeyOption
+  Comment          *SQLVal
+  Reference        *ReferenceDefinition
+}
+
+func mergeColumnAttrSet(yylex interface{}, dst *columnAttrSet, src *columnAttrSet) bool {
+  if src.NotNullSet {
+    if dst.NotNullSet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.NotNullSet = true
+    dst.NotNull = src.NotNull
+  }
+  if src.Default != nil {
+    if dst.Default != nil {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.Default = src.Default
+  }
+  if src.OnUpdate != nil {
+    if dst.OnUpdate != nil {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.OnUpdate = src.OnUpdate
+  }
+  if src.AutoIncrementSet {
+    if dst.AutoIncrementSet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.AutoIncrementSet = true
+    dst.AutoIncrement = src.AutoIncrement
+  }
+  if src.VisibilitySet {
+    if dst.VisibilitySet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.VisibilitySet = true
+    dst.Visibility = src.Visibility
+  }
+  if src.KeyOptSet {
+    if dst.KeyOptSet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.KeyOptSet = true
+    dst.KeyOpt = src.KeyOpt
+  }
+  if src.Comment != nil {
+    if dst.Comment != nil {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.Comment = src.Comment
+  }
+  if src.Reference != nil {
+    if dst.Reference != nil {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.Reference = src.Reference
+  }
+  return false
+}
+
+func applyColumnAttrSet(colType ColumnType, attrs *columnAttrSet) ColumnType {
+  if attrs == nil {
+    return colType
+  }
+  if attrs.NotNullSet {
+    colType.NotNull = attrs.NotNull
+  }
+  if attrs.Default != nil {
+    colType.Default = attrs.Default
+  }
+  if attrs.OnUpdate != nil {
+    colType.OnUpdate = attrs.OnUpdate
+  }
+  if attrs.AutoIncrementSet {
+    colType.Autoincrement = attrs.AutoIncrement
+  }
+  if attrs.VisibilitySet {
+    colType.Visibility = attrs.Visibility
+  }
+  if attrs.KeyOptSet {
+    colType.KeyOpt = attrs.KeyOpt
+  }
+  if attrs.Comment != nil {
+    colType.Comment = attrs.Comment
+  }
+  if attrs.Reference != nil {
+    colType.Reference = attrs.Reference
+  }
+  return colType
+}
+
 %}
 
 %union {
@@ -131,6 +241,7 @@ type addConstraintObject struct {
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
   referenceDefinition *ReferenceDefinition
+  columnAttrs *columnAttrSet
   indexDefinition *IndexDefinition
   constraintDefinition *ConstraintDefinition
   addConstraintObject *addConstraintObject
@@ -226,7 +337,7 @@ type addConstraintObject struct {
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
 // Type Modifiers
-%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL GENERATED ALWAYS STORED VIRTUAL
+%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL GENERATED ALWAYS STORED VIRTUAL VISIBLE INVISIBLE
 
 // Supported SHOW tokens
 %token <bytes> DATABASES TABLES EXTENDED FULL PROCESSLIST
@@ -347,23 +458,24 @@ type addConstraintObject struct {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <optVal> length_opt column_default_opt column_comment_opt on_update_opt
+%type <optVal> length_opt column_default_attr column_comment_attr column_comment_opt on_update_column_attr
 %type <optVal> current_timestamp_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolVal> null_opt auto_increment_opt
+%type <boolVal> null_attr auto_increment_attr
 %type <str> generated_storage_opt
-%type <colKeyOpt> column_key_opt
+%type <str> column_visibility_attr
+%type <colKeyOpt> column_key_opt column_key_attr
 %type <strs> enum_values
 %type <columnDefinition> column_definition
+%type <columnAttrs> column_attr_list column_attr
 %type <indexDefinition> index_definition
 %type <indexDefinition> alter_index_definition
 %type <indexDefinition> named_constraint_index_definition
 %type <constraintDefinition> constraint_definition
 %type <constraintDefinition> foreign_key_definition
 %type <referenceDefinition> reference_definition
-%type <referenceDefinition> reference_definition_opt
 %type <str> index_or_key
 %type <str> index_or_key_opt
 %type <colIdent> index_name_opt
@@ -772,37 +884,9 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt reference_definition_opt
+  sql_id column_type column_attr_list
   {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.OnUpdate = $5
-    $2.Autoincrement = $6
-    $2.KeyOpt = $7
-    $2.Comment = $8
-    $2.Reference = $9
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
-  }
-| sql_id column_type auto_increment_opt null_opt column_default_opt on_update_opt column_key_opt column_comment_opt reference_definition_opt
-  {
-    $2.Autoincrement = $3
-    $2.NotNull = $4
-    $2.Default = $5
-    $2.OnUpdate = $6
-    $2.KeyOpt = $7
-    $2.Comment = $8
-    $2.Reference = $9
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
-  }
-| sql_id column_type null_opt column_default_opt on_update_opt PRIMARY KEY auto_increment_opt column_comment_opt reference_definition_opt
-  {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.OnUpdate = $5
-    $2.KeyOpt = colKeyPrimary
-    $2.Autoincrement = $8
-    $2.Comment = $9
-    $2.Reference = $10
+    $2 = applyColumnAttrSet($2, $3)
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 | sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
@@ -1092,12 +1176,55 @@ zero_fill_opt:
     $$ = BoolVal(true)
   }
 
-// Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
-null_opt:
+column_attr_list:
   {
-    $$ = BoolVal(false)
+    $$ = &columnAttrSet{}
   }
-| NULL
+| column_attr_list column_attr
+  {
+    if mergeColumnAttrSet(yylex, $1, $2) {
+      return 1
+    }
+    $$ = $1
+  }
+
+column_attr:
+  null_attr
+  {
+    $$ = &columnAttrSet{NotNullSet: true, NotNull: $1}
+  }
+| column_default_attr
+  {
+    $$ = &columnAttrSet{Default: $1}
+  }
+| on_update_column_attr
+  {
+    $$ = &columnAttrSet{OnUpdate: $1}
+  }
+| auto_increment_attr
+  {
+    $$ = &columnAttrSet{AutoIncrementSet: true, AutoIncrement: $1}
+  }
+| column_visibility_attr
+  {
+    $$ = &columnAttrSet{VisibilitySet: true, Visibility: $1}
+  }
+| column_key_attr
+  {
+    $$ = &columnAttrSet{KeyOptSet: true, KeyOpt: $1}
+  }
+| column_comment_attr
+  {
+    $$ = &columnAttrSet{Comment: $1}
+  }
+| reference_definition
+  {
+    $$ = &columnAttrSet{Reference: $1}
+  }
+
+// null_attr returns false for NULL and true for NOT NULL.
+null_attr:
+  NULL
   {
     $$ = BoolVal(false)
   }
@@ -1106,11 +1233,8 @@ null_opt:
     $$ = BoolVal(true)
   }
 
-column_default_opt:
-  {
-    $$ = nil
-  }
-| DEFAULT STRING
+column_default_attr:
+  DEFAULT STRING
   {
     $$ = NewStrVal($2)
   }
@@ -1175,11 +1299,8 @@ column_default_opt:
     $$ = NewBoolVal(false)
   }
 
-on_update_opt:
-  {
-    $$ = nil
-  }
-| ON UPDATE current_timestamp_opt
+on_update_column_attr:
+  ON UPDATE current_timestamp_opt
 {
   $$ = $3
 }
@@ -1207,13 +1328,20 @@ current_timestamp_opt:
     $$ = NewValArg(value)
   }
 
-auto_increment_opt:
-  {
-    $$ = BoolVal(false)
-  }
-| AUTO_INCREMENT
+auto_increment_attr:
+  AUTO_INCREMENT
   {
     $$ = BoolVal(true)
+  }
+
+column_visibility_attr:
+  VISIBLE
+  {
+    $$ = string($1)
+  }
+| INVISIBLE
+  {
+    $$ = string($1)
   }
 
 generated_storage_opt:
@@ -1255,7 +1383,13 @@ column_key_opt:
   {
     $$ = colKeyNone
   }
-| PRIMARY KEY
+| column_key_attr
+  {
+    $$ = $1
+  }
+
+column_key_attr:
+  PRIMARY KEY
   {
     $$ = colKeyPrimary
   }
@@ -1272,13 +1406,19 @@ column_key_opt:
     $$ = colKeyUnique
   }
 
+column_comment_attr:
+  COMMENT_KEYWORD STRING
+  {
+    $$ = NewStrVal($2)
+  }
+
 column_comment_opt:
   {
     $$ = nil
   }
-| COMMENT_KEYWORD STRING
+| column_comment_attr
   {
-    $$ = NewStrVal($2)
+    $$ = $1
   }
 
 index_definition:
@@ -1361,12 +1501,6 @@ foreign_key_definition:
       OnUpdateAction: $6.OnUpdateAction,
     }
   }
-
-reference_definition_opt:
-  {
-    $$ = nil
-  }
-| reference_definition
 
 reference_definition:
   REFERENCES table_name openb column_list closeb reference_option_list_opt
@@ -1731,15 +1865,7 @@ alter_table_spec:
   }
 
 change_column_definition:
-  column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt reference_definition_opt
-  {
-    $$ = struct{}{}
-  }
-| column_type auto_increment_opt null_opt column_default_opt on_update_opt column_key_opt column_comment_opt reference_definition_opt
-  {
-    $$ = struct{}{}
-  }
-| column_type null_opt column_default_opt on_update_opt PRIMARY KEY auto_increment_opt column_comment_opt reference_definition_opt
+  column_type column_attr_list
   {
     $$ = struct{}{}
   }
@@ -4099,6 +4225,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | ISOLATION
+| INVISIBLE
 | JSON
 | JSON_TABLE
 | KEY_BLOCK_SIZE
@@ -4175,6 +4302,7 @@ non_reserved_keyword:
 | VARIABLES
 | VIEW
 | VINDEX
+| VISIBLE
 | VIRTUAL
 | WITH
 | WRITE

@@ -1336,6 +1336,8 @@ type ColumnType struct {
 	// Generic field options.
 	NotNull       BoolVal
 	Autoincrement BoolVal
+	// Visibility is either "visible" or "invisible" when specified.
+	Visibility    string
 	Default       *SQLVal
 	OnUpdate      *SQLVal
 	Comment       *SQLVal
@@ -1408,6 +1410,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Autoincrement {
 		opts = append(opts, keywordStrings[AUTO_INCREMENT])
+	}
+	if ct.Visibility != "" {
+		opts = append(opts, ct.Visibility)
 	}
 	if ct.Comment != nil {
 		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))

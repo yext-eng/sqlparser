@@ -1957,7 +1957,9 @@ func TestCreateTable(t *testing.T) {
 			"	total int generated always as (price * qty),\n" +
 			"	total_virtual int generated always as (price * qty) virtual,\n" +
 			"	total_stored int generated always as ((price * qty) + 1) stored key,\n" +
-			"	total_comment int generated always as (ifnull(price, 0) * qty) stored comment 'computed'\n" +
+			"	total_comment int generated always as (ifnull(price, 0) * qty) stored comment 'computed',\n" +
+			"	total_not_null int generated always as (ifnull(price, 0) * ifnull(qty, 0)) stored not null,\n" +
+			"	total_not_null_unique int generated always as (ifnull(price, 0) + ifnull(qty, 0)) stored not null comment 'derived' unique key\n" +
 			")",
 
 		// test defining indexes separately
@@ -2177,6 +2179,10 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_vis_a add column col_a int invisible",
 		"alter table tbl_vis_b modify column col_b int visible not null default 0",
 		"alter table tbl_vis_c change column col_old col_new int default 1 invisible",
+		"alter table tbl_gen_a add column col_gen int generated always as (col_src + 1) stored not null",
+		"alter table tbl_gen_b add column col_gen int generated always as (col_src + 1) not null stored",
+		"alter table tbl_gen_c modify column col_gen int generated always as (col_src + 1) comment 'derived' stored",
+		"alter table tbl_gen_d change column col_prev col_gen int generated always as (col_src + 1) key stored",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2461,6 +2467,10 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_attr_bad6 add column col_a int visible invisible",
 		"alter table tbl_attr_bad7 add column col_a int invisible visible",
 		"create table tbl_attr_bad8 (col_a int visible visible)",
+		"alter table tbl_attr_bad9 add column col_a int generated always as (col_b + 1) stored virtual",
+		"alter table tbl_attr_bad10 add column col_a int generated always as (col_b + 1) not null null",
+		"alter table tbl_attr_bad11 add column col_a int generated always as (col_b + 1) key unique",
+		"alter table tbl_attr_bad12 add column col_a int generated always as (col_b + 1) comment 'a' comment 'b'",
 	}
 	for _, sql := range invalidColumnAttributeDupSQL {
 		tree, err := ParseStrictDDL(sql)

@@ -99,6 +99,16 @@ type columnAttrSet struct {
   Reference        *ReferenceDefinition
 }
 
+type generatedColumnAttrSet struct {
+  NotNullSet bool
+  NotNull    BoolVal
+  StorageSet bool
+  Storage    string
+  KeyOptSet  bool
+  KeyOpt     ColumnKeyOption
+  Comment    *SQLVal
+}
+
 func mergeColumnAttrSet(yylex interface{}, dst *columnAttrSet, src *columnAttrSet) bool {
   if src.NotNullSet {
     if dst.NotNullSet {
@@ -163,6 +173,41 @@ func mergeColumnAttrSet(yylex interface{}, dst *columnAttrSet, src *columnAttrSe
   return false
 }
 
+func mergeGeneratedColumnAttrSet(yylex interface{}, dst *generatedColumnAttrSet, src *generatedColumnAttrSet) bool {
+  if src.NotNullSet {
+    if dst.NotNullSet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.NotNullSet = true
+    dst.NotNull = src.NotNull
+  }
+  if src.StorageSet {
+    if dst.StorageSet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.StorageSet = true
+    dst.Storage = src.Storage
+  }
+  if src.KeyOptSet {
+    if dst.KeyOptSet {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.KeyOptSet = true
+    dst.KeyOpt = src.KeyOpt
+  }
+  if src.Comment != nil {
+    if dst.Comment != nil {
+      yylex.(*Tokenizer).Error("syntax error")
+      return true
+    }
+    dst.Comment = src.Comment
+  }
+  return false
+}
+
 func applyColumnAttrSet(colType ColumnType, attrs *columnAttrSet) ColumnType {
   if attrs == nil {
     return colType
@@ -190,6 +235,25 @@ func applyColumnAttrSet(colType ColumnType, attrs *columnAttrSet) ColumnType {
   }
   if attrs.Reference != nil {
     colType.Reference = attrs.Reference
+  }
+  return colType
+}
+
+func applyGeneratedColumnAttrSet(colType ColumnType, attrs *generatedColumnAttrSet) ColumnType {
+  if attrs == nil {
+    return colType
+  }
+  if attrs.NotNullSet {
+    colType.NotNull = attrs.NotNull
+  }
+  if attrs.StorageSet {
+    colType.GeneratedStorage = attrs.Storage
+  }
+  if attrs.KeyOptSet {
+    colType.KeyOpt = attrs.KeyOpt
+  }
+  if attrs.Comment != nil {
+    colType.Comment = attrs.Comment
   }
   return colType
 }
@@ -275,6 +339,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
   columnDefinition *ColumnDefinition
   referenceDefinition *ReferenceDefinition
   columnAttrs *columnAttrSet
+  generatedColumnAttrs *generatedColumnAttrSet
   indexDefinition *IndexDefinition
   constraintDefinition *ConstraintDefinition
   addConstraintObject *addConstraintObject
@@ -491,19 +556,20 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <optVal> length_opt column_comment_attr column_comment_opt on_update_column_attr
+%type <optVal> length_opt column_comment_attr on_update_column_attr
 %type <expr> column_default_attr
 %type <optVal> current_timestamp_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> null_attr auto_increment_attr
-%type <str> generated_storage_opt
+%type <str> generated_storage_attr
 %type <str> column_visibility_attr
-%type <colKeyOpt> column_key_opt column_key_attr
+%type <colKeyOpt> column_key_attr
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <columnAttrs> column_attr_list column_attr
+%type <generatedColumnAttrs> generated_column_attr_list generated_column_attr
 %type <indexDefinition> index_definition
 %type <indexDefinition> alter_index_definition
 %type <indexDefinition> named_constraint_index_definition
@@ -927,12 +993,10 @@ column_definition:
     $2 = applyColumnAttrSet($2, $3)
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
+| sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_column_attr_list
   {
     $2.GeneratedExpr = $7
-    $2.GeneratedStorage = $9
-    $2.KeyOpt = $10
-    $2.Comment = $11
+    $2 = applyGeneratedColumnAttrSet($2, $9)
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 column_type:
@@ -1322,17 +1386,44 @@ column_visibility_attr:
     $$ = string($1)
   }
 
-generated_storage_opt:
-  {
-    $$ = ""
-  }
-| VIRTUAL
+generated_storage_attr:
+  VIRTUAL
   {
     $$ = string($1)
   }
 | STORED
   {
     $$ = string($1)
+  }
+
+generated_column_attr_list:
+  {
+    $$ = &generatedColumnAttrSet{}
+  }
+| generated_column_attr_list generated_column_attr
+  {
+    if mergeGeneratedColumnAttrSet(yylex, $1, $2) {
+      return 1
+    }
+    $$ = $1
+  }
+
+generated_column_attr:
+  null_attr
+  {
+    $$ = &generatedColumnAttrSet{NotNullSet: true, NotNull: $1}
+  }
+| generated_storage_attr
+  {
+    $$ = &generatedColumnAttrSet{StorageSet: true, Storage: $1}
+  }
+| column_key_attr
+  {
+    $$ = &generatedColumnAttrSet{KeyOptSet: true, KeyOpt: $1}
+  }
+| column_comment_attr
+  {
+    $$ = &generatedColumnAttrSet{Comment: $1}
   }
 
 charset_opt:
@@ -1357,15 +1448,6 @@ collate_opt:
     $$ = string($2)
   }
 
-column_key_opt:
-  {
-    $$ = colKeyNone
-  }
-| column_key_attr
-  {
-    $$ = $1
-  }
-
 column_key_attr:
   PRIMARY KEY
   {
@@ -1388,15 +1470,6 @@ column_comment_attr:
   COMMENT_KEYWORD STRING
   {
     $$ = NewStrVal($2)
-  }
-
-column_comment_opt:
-  {
-    $$ = nil
-  }
-| column_comment_attr
-  {
-    $$ = $1
   }
 
 index_definition:
@@ -1872,8 +1945,10 @@ change_column_definition:
   {
     $$ = struct{}{}
   }
-| column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
+| column_type GENERATED ALWAYS AS openb expression closeb generated_column_attr_list
   {
+    $1.GeneratedExpr = $6
+    $1 = applyGeneratedColumnAttrSet($1, $8)
     $$ = struct{}{}
   }
 

@@ -2158,6 +2158,32 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	validAlterTableOptionsSQL := []string{
+		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace, lock=none",
+		"alter table tbl_a add constraint uq_ab unique key idx_ab (col_a, col_b), lock=shared",
+		"alter table tbl_a drop index idx_ab, lock=shared",
+		"alter table tbl_a rename index idx_old to idx_new, algorithm=instant",
+	}
+	for _, sql := range validAlterTableOptionsSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree == nil || err != nil {
+			t.Errorf("ParseStrictDDL unexpectedly rejected input %s: %v", sql, err)
+		}
+	}
+
+	// Regression coverage: existing ALTER TABLE forms should still parse without trailing options.
+	validAlterTableRegressionSQL := []string{
+		"alter table tbl_a add index idx_ab (col_a, col_b)",
+		"alter table tbl_a add (col_a int)",
+		"alter table tbl_a drop foreign key fk_ab",
+	}
+	for _, sql := range validAlterTableRegressionSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree == nil || err != nil {
+			t.Errorf("ParseStrictDDL unexpectedly rejected input %s: %v", sql, err)
+		}
+	}
+
 	sql := "create table t garbage"
 	tree, err := Parse(sql)
 	if err != nil {
@@ -2176,6 +2202,29 @@ func TestCreateTable(t *testing.T) {
 		"create table t (total int generated always as (1) nonsense)",
 	}
 	for _, sql := range invalidCreateTableGeneratedSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidAlterTableOptionsSQL := []string{
+		// ALGORITHM option requires a value.
+		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=",
+		// LOCK option requires a value.
+		"alter table tbl_a add index idx_ab (col_a, col_b), lock=",
+		// Trailing comma after alter options is invalid.
+		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace,",
+		// Trailing comma after the final alter option is invalid.
+		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace, lock=none,",
+		// Unknown alter option key is invalid.
+		"alter table tbl_a add index idx_ab (col_a, col_b), optimizer=instant",
+		// LOCK only accepts DEFAULT, NONE, SHARED, or EXCLUSIVE.
+		"alter table tbl_a add index idx_ab (col_a, col_b), lock=fast",
+		// ALGORITHM only accepts DEFAULT, INSTANT, INPLACE, or COPY.
+		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=online",
+	}
+	for _, sql := range invalidAlterTableOptionsSQL {
 		tree, err := ParseStrictDDL(sql)
 		if tree != nil || err == nil {
 			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)

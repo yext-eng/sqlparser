@@ -324,6 +324,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <empty> alter_index_options_opt alter_index_options alter_index_option
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <with> with_opt with_clause
@@ -1573,11 +1574,11 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, TableSpec: $7}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_index_definition force_eof
+| ALTER ignore_opt TABLE table_name ADD alter_index_definition alter_index_options_opt force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterIndex: $6}
   }
-| ALTER ignore_opt TABLE table_name ADD CONSTRAINT sql_id alter_index_definition force_eof
+| ALTER ignore_opt TABLE table_name ADD CONSTRAINT sql_id alter_index_definition alter_index_options_opt force_eof
   {
     if $8 != nil && $8.Info != nil && $8.Info.Name.IsEmpty() {
       $8.Info.Name = $7
@@ -1600,6 +1601,14 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
+| ALTER ignore_opt TABLE table_name DROP index_opt sql_id alter_index_options_opt force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name DROP index_opt sql_id openb force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
 | ALTER ignore_opt TABLE table_name DROP FOREIGN KEY force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
@@ -1618,6 +1627,11 @@ alter_statement:
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
+| ALTER ignore_opt TABLE table_name RENAME index_opt sql_id TO sql_id alter_index_options_opt force_eof
+  {
+    // Rename an index can just be an alter
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
 | ALTER VIEW table_name AS select_statement
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName(), OptSelect: $5}
@@ -1625,6 +1639,46 @@ alter_statement:
 | ALTER ignore_opt TABLE table_name partition_operation
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+  }
+
+alter_index_options_opt:
+  {
+    $$ = struct{}{}
+  }
+| ',' alter_index_options
+  {
+    $$ = struct{}{}
+  }
+
+alter_index_options:
+  alter_index_option
+  {
+    $$ = struct{}{}
+  }
+| alter_index_options ',' alter_index_option
+  {
+    $$ = struct{}{}
+  }
+
+alter_index_option:
+  reserved_sql_id equal_opt reserved_sql_id
+  {
+    if $1.EqualString("algorithm") {
+      if !$3.EqualString("default") && !$3.EqualString("instant") && !$3.EqualString("inplace") && !$3.EqualString("copy") {
+        yylex.Error("syntax error")
+        return 1
+      }
+      $$ = struct{}{}
+    } else if $1.EqualString("lock") {
+      if !$3.EqualString("default") && !$3.EqualString("none") && !$3.EqualString("shared") && !$3.EqualString("exclusive") {
+        yylex.Error("syntax error")
+        return 1
+      }
+      $$ = struct{}{}
+    } else {
+      yylex.Error("syntax error")
+      return 1
+    }
   }
 
 alter_object_type:

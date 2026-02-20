@@ -2287,6 +2287,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_incomplete add constraint",
 		"alter table tbl_incomplete add foreign key",
 		"alter table tbl_incomplete add primary",
+		"alter table tbl_incomplete add primary key",
+		"alter table tbl_incomplete add constraint pk_tbl_incomplete primary key",
+		"alter table tbl_incomplete add constraint primary key",
 		"alter table tbl_incomplete add id",
 		"alter table tbl_incomplete modify col_a",
 		"alter table tbl_incomplete modify column col_a",
@@ -2370,6 +2373,10 @@ func TestCreateTable(t *testing.T) {
 		"create table t (id int, constraint uq_t unique key)",
 		// Missing index type/body in CREATE TABLE named unique constraint.
 		"create table t (id int, constraint uq_t unique)",
+		// Missing index column list in CREATE TABLE named primary-key constraint.
+		"create table t (id int, constraint pk_t primary key)",
+		// Missing index column list in CREATE TABLE unnamed primary-key constraint.
+		"create table t (id int, constraint primary key)",
 	}
 	for _, sql := range invalidCreateTableConstraintUniqueSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2557,6 +2564,24 @@ func TestCreateTable(t *testing.T) {
 			"\tcol_id int,\n" +
 			"\tcol_c int,\n" +
 			"\tunique key uq_generic_key (col_c)\n" +
+			")",
+	}, {
+		input: "create table tbl_primary_named (\n" +
+			"	col_id int not null,\n" +
+			"	constraint pk_tbl_primary_named primary key (col_id)\n" +
+			")",
+		output: "create table tbl_primary_named (\n" +
+			"\tcol_id int not null,\n" +
+			"\tprimary key (col_id)\n" +
+			")",
+	}, {
+		input: "create table tbl_primary_unnamed (\n" +
+			"	col_id int not null,\n" +
+			"	constraint primary key (col_id)\n" +
+			")",
+		output: "create table tbl_primary_unnamed (\n" +
+			"\tcol_id int not null,\n" +
+			"\tprimary key (col_id)\n" +
 			")",
 	}, {
 		input:  "alter table t add constraint foreign key (parent_id) references parent (id)",

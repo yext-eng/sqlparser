@@ -912,6 +912,10 @@ table_column_list:
     }
     $$.AddIndex($5)
   }
+| table_column_list ',' CONSTRAINT named_constraint_index_definition
+  {
+    $$.AddIndex($4)
+  }
 
 column_definition:
   sql_id column_type column_attr_list
@@ -1402,7 +1406,22 @@ index_definition:
   }
 
 named_constraint_index_definition:
-  UNIQUE index_or_key_opt '(' index_column_list ')' index_option_list
+  PRIMARY KEY '(' index_column_list ')' index_option_list
+  {
+    $$ = &IndexDefinition{
+      Info: &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true},
+      Columns: $4,
+      Options: $6,
+    }
+  }
+| PRIMARY KEY '(' index_column_list ')'
+  {
+    $$ = &IndexDefinition{
+      Info: &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true},
+      Columns: $4,
+    }
+  }
+| UNIQUE index_or_key_opt '(' index_column_list ')' index_option_list
   {
     indexType := string($1)
     if $2 != "" {
@@ -1876,28 +1895,16 @@ alter_table_option:
   }
 
 add_constraint_object:
-  CONSTRAINT sql_id PRIMARY KEY
-  {
-    $$ = &addConstraintObject{}
-  }
-| CONSTRAINT sql_id alter_index_definition
+  CONSTRAINT sql_id alter_index_definition
   {
     if $3 != nil && $3.Info != nil && $3.Info.Name.IsEmpty() {
       $3.Info.Name = $2
     }
     $$ = &addConstraintObject{Index: $3}
   }
-| CONSTRAINT PRIMARY KEY
-  {
-    $$ = &addConstraintObject{}
-  }
 | CONSTRAINT alter_index_definition
   {
     $$ = &addConstraintObject{Index: $2}
-  }
-| PRIMARY KEY
-  {
-    $$ = &addConstraintObject{}
   }
 | alter_index_definition
   {

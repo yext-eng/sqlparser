@@ -931,10 +931,6 @@ var (
 		input:  "alter table a drop primary key",
 		output: "alter table a",
 	}, {
-		input: "create table a",
-	}, {
-		input: "create temporary table a",
-	}, {
 		input:  "create table a as select 1",
 		output: "create table a as select 1 from dual",
 	}, {
@@ -950,7 +946,8 @@ var (
 		input:  "create temporary table if not exists a (\n\t`a` int\n)",
 		output: "create temporary table if not exists a (\n\ta int\n)",
 	}, {
-		input: "create table `by` (\n\t`by` char\n)",
+		input:  "create table `by` (\n\t`by` char\n)",
+		output: "create table `by` (\n\t`by` char\n)",
 	}, {
 		input:  "create table t_fulltext (\n\tc1 text,\n\tfulltext key idx_ft (c1)\n)",
 		output: "create table t_fulltext (\n\tc1 text,\n\tfulltext key idx_ft (c1)\n)",
@@ -960,12 +957,6 @@ var (
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table if not exists a (\n\ta int\n)",
-	}, {
-		input:  "create table a ignore me this is garbage",
-		output: "create table a",
-	}, {
-		input:  "create table a (a int, b char, c garbage)",
-		output: "create table a",
 	}, {
 		input:  "create index a on b",
 		output: "alter table b",
@@ -1345,7 +1336,7 @@ func TestValid(t *testing.T) {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := Parse(tcase.input)
+		tree, err := ParseStrictDDL(tcase.input)
 		if err != nil {
 			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 			continue

@@ -351,6 +351,7 @@ func isAllowedGenericShowType(id []byte) bool {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <indexDefinition> alter_index_definition
+%type <indexDefinition> named_constraint_index_definition
 %type <constraintDefinition> constraint_definition
 %type <constraintDefinition> foreign_key_definition
 %type <referenceDefinition> reference_definition
@@ -754,6 +755,13 @@ table_column_list:
   {
     $$.AddConstraint($3)
   }
+| table_column_list ',' CONSTRAINT sql_id named_constraint_index_definition
+  {
+    if $5 != nil && $5.Info != nil && $5.Info.Name.IsEmpty() {
+      $5.Info.Name = $4
+    }
+    $$.AddIndex($5)
+  }
 
 column_definition:
   sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt reference_definition_opt
@@ -776,6 +784,17 @@ column_definition:
     $2.KeyOpt = $7
     $2.Comment = $8
     $2.Reference = $9
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+| sql_id column_type null_opt column_default_opt on_update_opt PRIMARY KEY auto_increment_opt column_comment_opt reference_definition_opt
+  {
+    $2.NotNull = $3
+    $2.Default = $4
+    $2.OnUpdate = $5
+    $2.KeyOpt = colKeyPrimary
+    $2.Autoincrement = $8
+    $2.Comment = $9
+    $2.Reference = $10
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 | sql_id column_type GENERATED ALWAYS AS openb expression closeb generated_storage_opt column_key_opt column_comment_opt
@@ -1238,6 +1257,31 @@ index_definition:
 | index_info '(' index_column_list ')'
   {
     $$ = &IndexDefinition{Info: $1, Columns: $3}
+  }
+
+named_constraint_index_definition:
+  UNIQUE index_or_key_opt '(' index_column_list ')' index_option_list
+  {
+    indexType := string($1)
+    if $2 != "" {
+      indexType += " " + string($2)
+    }
+    $$ = &IndexDefinition{
+      Info: &IndexInfo{Type: indexType, Name: NewColIdent(""), Unique: true},
+      Columns: $4,
+      Options: $6,
+    }
+  }
+| UNIQUE index_or_key_opt '(' index_column_list ')'
+  {
+    indexType := string($1)
+    if $2 != "" {
+      indexType += " " + string($2)
+    }
+    $$ = &IndexDefinition{
+      Info: &IndexInfo{Type: indexType, Name: NewColIdent(""), Unique: true},
+      Columns: $4,
+    }
   }
 
 alter_index_definition:

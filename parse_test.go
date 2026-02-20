@@ -2224,6 +2224,19 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	invalidCreateTableConstraintUniqueSQL := []string{
+		// Missing index column list in CREATE TABLE named unique constraint.
+		"create table t (id int, constraint uq_t unique key)",
+		// Missing index type/body in CREATE TABLE named unique constraint.
+		"create table t (id int, constraint uq_t unique)",
+	}
+	for _, sql := range invalidCreateTableConstraintUniqueSQL {
+		tree, err := ParseStrictDDL(sql)
+		if tree != nil || err == nil {
+			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		}
+	}
+
 	invalidCreateTablePartitionSQL := []string{
 		// Missing partition definition list after PARTITION BY RANGE (...).
 		"create table t (id int) partition by range (id)",
@@ -2305,6 +2318,15 @@ func TestCreateTable(t *testing.T) {
 			")",
 	}, {
 		input: "create table t (\n" +
+			"	id int not null primary key auto_increment,\n" +
+			"	alt_id int not null auto_increment primary key\n" +
+			")",
+		output: "create table t (\n" +
+			"\tid int not null auto_increment primary key,\n" +
+			"\talt_id int not null auto_increment primary key\n" +
+			")",
+	}, {
+		input: "create table t (\n" +
 			"	status int,\n" +
 			"	variables int,\n" +
 			"	offset int,\n" +
@@ -2332,6 +2354,30 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		input:  "alter table stable_ids add constraint stable_id_uniq unique key (site_id, document_id, locale, feature, source)",
 		output: "alter table stable_ids add unique key stable_id_uniq (site_id, document_id, locale, feature, source)",
+	}, {
+		input: "create table tbl_a (\n" +
+			"	col_id int,\n" +
+			"	col_a int,\n" +
+			"	col_b int,\n" +
+			"	constraint uq_generic unique index (col_a, col_b)\n" +
+			")",
+		output: "create table tbl_a (\n" +
+			"\tcol_id int,\n" +
+			"\tcol_a int,\n" +
+			"\tcol_b int,\n" +
+			"\tunique index uq_generic (col_a, col_b)\n" +
+			")",
+	}, {
+		input: "create table tbl_b (\n" +
+			"	col_id int,\n" +
+			"	col_c int,\n" +
+			"	constraint uq_generic_key unique key (col_c)\n" +
+			")",
+		output: "create table tbl_b (\n" +
+			"\tcol_id int,\n" +
+			"\tcol_c int,\n" +
+			"\tunique key uq_generic_key (col_c)\n" +
+			")",
 	}, {
 		input:  "alter table t add constraint foreign key (parent_id) references parent (id)",
 		output: "alter table t add foreign key (parent_id) references parent (id)",

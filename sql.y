@@ -330,8 +330,7 @@ type addConstraintObject struct {
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
-%type <empty> alter_table_item alter_table_item_list alter_table_spec alter_table_option column_position_opt
-%type <empty> add_column_object
+%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option column_position_opt
 %type <empty> spatial_or_fulltext
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -1603,27 +1602,14 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name alter_table_item_list force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name ADD openb table_column_list closeb force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, TableSpec: $7}
-  }
-| ALTER ignore_opt TABLE table_name ADD add_column_object force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name ADD add_constraint_object force_eof
+| ALTER ignore_opt TABLE table_name alter_table_operation_list force_eof
   {
     ddl := &DDL{Action: AlterStr, Table: $4, NewName: $4}
-    if $6 != nil {
-      if $6.Constraint != nil {
-        ddl.AlterConstraint = $6.Constraint
-      } else if $6.Index != nil {
-        ddl.AlterIndex = $6.Index
-      }
+    if yylex.(*Tokenizer).partialDDL != nil {
+      ddl.TableSpec = yylex.(*Tokenizer).partialDDL.TableSpec
+      ddl.AlterConstraint = yylex.(*Tokenizer).partialDDL.AlterConstraint
+      ddl.AlterDropForeignKey = yylex.(*Tokenizer).partialDDL.AlterDropForeignKey
+      ddl.AlterIndex = yylex.(*Tokenizer).partialDDL.AlterIndex
     }
     $$ = ddl
   }
@@ -1647,10 +1633,6 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP index_opt sql_id force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
 | ALTER ignore_opt TABLE table_name DROP index_opt sql_id openb force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
@@ -1659,24 +1641,22 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP FOREIGN KEY sql_id force_eof
+| ALTER ignore_opt TABLE table_name MODIFY ddl_force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4, AlterDropForeignKey: $8}
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name MODIFY COLUMN ddl_force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
+  }
+| ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
-  }
-| ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
-  {
-    // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name RENAME index_opt sql_id TO sql_id force_eof
-  {
-    // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
 | ALTER VIEW table_name AS select_statement
   {
@@ -1687,41 +1667,18 @@ alter_statement:
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
 
-alter_table_item_list:
-  alter_table_item ',' alter_table_item
+alter_table_operation_list:
+  alter_table_operation
   {
     $$ = struct{}{}
   }
-| alter_table_item ',' DROP PRIMARY KEY
+| alter_table_operation_list ',' alter_table_operation
   {
-    $$ = struct{}{}
-  }
-| alter_table_item ',' MODIFY column_definition column_position_opt
-  {
-    $$ = struct{}{}
-  }
-| alter_table_item ',' MODIFY COLUMN column_definition column_position_opt
-  {
-    $$ = struct{}{}
-  }
-| alter_table_item_list ',' alter_table_item
-  {
-    $$ = struct{}{}
-  }
-| alter_table_item_list ',' DROP PRIMARY KEY
-  {
-    $$ = struct{}{}
-  }
-| alter_table_item_list ',' MODIFY column_definition column_position_opt
-  {
-    $$ = struct{}{}
-  }
-| alter_table_item_list ',' MODIFY COLUMN column_definition column_position_opt
-  {
+    setDDL(yylex, nil)
     $$ = struct{}{}
   }
 
-alter_table_item:
+alter_table_operation:
   alter_table_spec
   {
     $$ = struct{}{}
@@ -1742,10 +1699,20 @@ alter_table_spec:
   }
 | ADD openb table_column_list closeb
   {
+    setDDL(yylex, &DDL{TableSpec: $3})
     $$ = struct{}{}
   }
 | ADD add_constraint_object
   {
+    ddl := &DDL{}
+    if $2 != nil {
+      if $2.Constraint != nil {
+        ddl.AlterConstraint = $2.Constraint
+      } else if $2.Index != nil {
+        ddl.AlterIndex = $2.Index
+      }
+    }
+    setDDL(yylex, ddl)
     $$ = struct{}{}
   }
 | DROP index_opt sql_id
@@ -1753,6 +1720,19 @@ alter_table_spec:
     $$ = struct{}{}
   }
 | DROP FOREIGN KEY sql_id
+  {
+    setDDL(yylex, &DDL{AlterDropForeignKey: $4})
+    $$ = struct{}{}
+  }
+| DROP PRIMARY KEY
+  {
+    $$ = struct{}{}
+  }
+| MODIFY COLUMN column_definition column_position_opt
+  {
+    $$ = struct{}{}
+  }
+| MODIFY column_definition column_position_opt
   {
     $$ = struct{}{}
   }
@@ -1815,16 +1795,6 @@ alter_add_object_type:
 | SPATIAL
 | PARTITION
 | UNIQUE
-
-add_column_object:
-  COLUMN column_definition column_position_opt
-  {
-    $$ = struct{}{}
-  }
-| column_definition column_position_opt
-  {
-    $$ = struct{}{}
-  }
 
 add_constraint_object:
   CONSTRAINT sql_id PRIMARY KEY
@@ -3929,8 +3899,6 @@ non_add_drop_or_rename_operation:
 | DEFAULT
   { $$ = struct{}{} }
 | ORDER
-  { $$ = struct{}{} }
-| MODIFY
   { $$ = struct{}{} }
 | CONVERT
   { $$ = struct{}{} }

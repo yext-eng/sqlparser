@@ -2208,6 +2208,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_pos1 add column col_new int first",
 		"alter table tbl_pos2 add col_new int after col_prev",
 		"alter table `tbl_pos4` add column `col_new` int after `col_prev`",
+		"alter table tbl_pos4 modify col_new int after col_prev",
+		"alter table tbl_pos4 modify column col_new int first",
 		"alter table tbl_pos5 drop key idx_a, modify col_new int after col_prev",
 		"alter table tbl_pos6 add unique (col_a), modify column col_a varchar(16) first",
 	}
@@ -2311,6 +2313,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_pos_bad4 drop key idx_a, modify col_new int after",
 		// FIRST must terminate the MODIFY position clause.
 		"alter table tbl_pos_bad5 drop key idx_a, modify column col_new int first col_prev",
+		// Single-spec MODIFY also requires a target column identifier after AFTER.
+		"alter table tbl_pos_bad6 modify col_new int after",
 	}
 	for _, sql := range invalidAlterTableColumnPositionSQL {
 		tree, err := ParseStrictDDL(sql)

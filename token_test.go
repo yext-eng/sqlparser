@@ -137,6 +137,37 @@ func TestString(t *testing.T) {
 	}
 }
 
+func TestScanAssignAndBindVar(t *testing.T) {
+	testcases := []struct {
+		in      string
+		wantID  int
+		wantOut string
+	}{{
+		in:      ":=",
+		wantID:  ASSIGN,
+		wantOut: "",
+	}, {
+		in:      ":v1",
+		wantID:  VALUE_ARG,
+		wantOut: ":v1",
+	}, {
+		in:      ":v",
+		wantID:  LEX_ERROR,
+		wantOut: ":v",
+	}, {
+		in:      ":a1",
+		wantID:  LEX_ERROR,
+		wantOut: ":",
+	}}
+
+	for _, tcase := range testcases {
+		id, out := NewStringTokenizer(tcase.in).Scan()
+		if id != tcase.wantID || string(out) != tcase.wantOut {
+			t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), out, tokenName(tcase.wantID), tcase.wantOut)
+		}
+	}
+}
+
 func TestSplitStatement(t *testing.T) {
 	testcases := []struct {
 		in  string

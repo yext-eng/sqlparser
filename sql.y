@@ -54,6 +54,10 @@ func isAtSign(tok []byte) bool {
   return len(tok) == 1 && tok[0] == '@'
 }
 
+func isUserVariableColumnName(col *ColName) bool {
+  return col != nil && col.Qualifier.IsEmpty() && strings.HasPrefix(col.Name.String(), "@")
+}
+
 func rejectDeprecatedSetVar(yylex interface{}, name ColIdent) bool {
   lowered := name.Lowered()
   if lowered == "tx_isolation" || lowered == "tx_read_only" {
@@ -341,6 +345,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 // operators because the syntax is restricted enough that
 // they don't cause conflicts.
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
+%token <empty> ASSIGN
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD AFTER ALGORITHM FIRST
@@ -428,7 +433,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <boolVal> boolean_value
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression
+%type <expr> value value_expression assignment_expression
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <selectExprs> func_datetime_precision_opt
 %type <str> is_suffix
@@ -3075,6 +3080,10 @@ value_expression:
   {
     $$ = $1
   }
+| assignment_expression
+  {
+    $$ = $1
+  }
 | value_expression '&' value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
@@ -3185,6 +3194,16 @@ value_expression:
 | function_call_keyword
 | function_call_nonkeyword
 | function_call_conflict
+
+assignment_expression:
+  column_name ASSIGN value_expression
+  {
+    if !isUserVariableColumnName($1) {
+      yylex.Error("expecting user variable on left side of :=")
+      return 1
+    }
+    $$ = &BinaryExpr{Left: $1, Operator: AssignStr, Right: $3}
+  }
 
 /*
   Regular function calls without special token or syntax, guaranteed to not

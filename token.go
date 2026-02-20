@@ -728,6 +728,10 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(byte(tkn.lastChar))
 	tkn.next()
+	if tkn.lastChar == '=' {
+		tkn.next()
+		return ASSIGN, nil
+	}
 	if tkn.lastChar != 'v' && tkn.lastChar != 'V' {
 		return LEX_ERROR, buffer.Bytes()
 	}

@@ -3225,6 +3225,7 @@ const (
 	ModStr        = "%"
 	ShiftLeftStr  = "<<"
 	ShiftRightStr = ">>"
+	AssignStr     = ":="
 )
 
 // Format formats the node.

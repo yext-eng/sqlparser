@@ -85,6 +85,9 @@ var (
 	}, {
 		input: "select /* @ */ @@a from b",
 	}, {
+		input:  "select (@uv:=@uv+1) from t",
+		output: "select (@uv := @uv + 1) from t",
+	}, {
 		input: "select /* \\0 */ '\\0' from a",
 	}, {
 		input:  "select 1 /* drop this comment */ from t",
@@ -697,6 +700,9 @@ var (
 		input: "update /* where */ a set b = 3 where a = b",
 	}, {
 		input: "update /* order */ a set b = 3 order by c desc",
+	}, {
+		input:  "update x set y = (@uv:=@uv+1) order by z asc",
+		output: "update x set y = (@uv := @uv + 1) order by z asc",
 	}, {
 		input: "update /* limit */ a set b = 3 limit c",
 	}, {
@@ -1686,6 +1692,20 @@ func TestKeywords(t *testing.T) {
 		out := String(tree)
 		if out != tcase.output {
 			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
+func TestUserVariableAssignmentInvalid(t *testing.T) {
+	invalidSQL := []string{
+		// The left side of := is a regular column identifier, not a user variable.
+		"select (a:=1) from t",
+		// UPDATE assignment expression uses a regular column identifier on the left side of :=.
+		"update t set c = (a:=1)",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
 		}
 	}
 }

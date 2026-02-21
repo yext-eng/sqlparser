@@ -1060,6 +1060,8 @@ type PartitionSpec struct {
 	Action      string
 	Name        ColIdent
 	Expr        Expr
+	IsColumns   bool
+	ColumnList  Columns
 	Definitions []*PartitionDefinition
 }
 
@@ -1069,7 +1071,11 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	case ReorganizeStr:
 		buf.Myprintf("%s %v into (", node.Action, node.Name)
 	case PartitionByRangeStr:
-		buf.Myprintf("%s (%v) (", node.Action, node.Expr)
+		if node.IsColumns {
+			buf.Myprintf("%s columns %v (", node.Action, node.ColumnList)
+		} else {
+			buf.Myprintf("%s (%v) (", node.Action, node.Expr)
+		}
 	default:
 		panic("unimplemented")
 	}
@@ -1090,6 +1096,9 @@ func (node *PartitionSpec) walkSubtree(visit Visit) error {
 		return err
 	}
 	if err := Walk(visit, node.Expr); err != nil {
+		return err
+	}
+	if err := Walk(visit, node.ColumnList); err != nil {
 		return err
 	}
 	for _, def := range node.Definitions {

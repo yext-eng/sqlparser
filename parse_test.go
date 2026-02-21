@@ -2425,6 +2425,12 @@ func TestCreateTable(t *testing.T) {
 		"create table t (id int) partition by range (id)",
 		// RANGE expression must be parenthesized.
 		"create table t (id int) partition by range id (partition p0 values less than (10))",
+		// RANGE COLUMNS list must be parenthesized.
+		"create table t (id int) partition by range columns id (partition p0 values less than (10))",
+		// RANGE COLUMNS requires at least one column.
+		"create table t (id int) partition by range columns () (partition p0 values less than (10))",
+		// Missing partition definition list parentheses after RANGE COLUMNS.
+		"create table t (id int) partition by range columns (id) partition p0 values less than (10)",
 		// VALUES LESS THAN limit must be parenthesized for non-MAXVALUE expressions.
 		"create table t (id int) partition by range (id) (partition p0 values less than 10)",
 		// ENGINE option requires a value.
@@ -2720,6 +2726,30 @@ func TestCreateTable(t *testing.T) {
 			"\tid bigint unsigned not null auto_increment,\n" +
 			"\tprimary key (id)\n" +
 			") partition by range (id) (partition p0 values less than (100) engine InnoDB, partition p1 values less than (maxvalue) engine InnoDB)",
+	}, {
+		input: "create table t_part (\n" +
+			"	c_id bigint unsigned not null,\n" +
+			"	primary key (c_id)\n" +
+			") partition by range columns (c_id) (\n" +
+			"	partition p0 values less than (100),\n" +
+			"	partition p1 values less than maxvalue\n" +
+			")",
+		output: "create table t_part (\n" +
+			"\tc_id bigint unsigned not null,\n" +
+			"\tprimary key (c_id)\n" +
+			") partition by range columns (c_id) (partition p0 values less than (100), partition p1 values less than (maxvalue))",
+	}, {
+		input: "create table t_part_engine (\n" +
+			"	c_id bigint unsigned not null,\n" +
+			"	primary key (c_id)\n" +
+			") partition by range columns (c_id) (\n" +
+			"	partition p0 values less than (100) engine = InnoDB,\n" +
+			"	partition p1 values less than maxvalue storage engine InnoDB\n" +
+			")",
+		output: "create table t_part_engine (\n" +
+			"\tc_id bigint unsigned not null,\n" +
+			"\tprimary key (c_id)\n" +
+			") partition by range columns (c_id) (partition p0 values less than (100) engine InnoDB, partition p1 values less than (maxvalue) engine InnoDB)",
 	}, {
 		input: "create table update_files (\n" +
 			"	update_id bigint(20) not null,\n" +

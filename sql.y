@@ -2022,6 +2022,10 @@ partition_opt:
   {
     $$ = &PartitionSpec{Action: PartitionByRangeStr, Expr: $5, Definitions: $8}
   }
+| PARTITION BY RANGE COLUMNS openb column_list closeb openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: PartitionByRangeStr, IsColumns: true, ColumnList: $6, Definitions: $9}
+  }
 
 partition_definitions:
   partition_definition

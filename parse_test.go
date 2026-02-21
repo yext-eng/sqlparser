@@ -816,27 +816,6 @@ var (
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a add unique key foo (column1)",
 	}, {
-		input:  "alter table a alter foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a disable foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a enable foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a order foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a default foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a discard foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a import foo",
-		output: "alter table a",
-	}, {
 		input:  "alter table a rename b",
 		output: "rename table a to b",
 	}, {
@@ -871,7 +850,7 @@ var (
 		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
 	}, {
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-		output: "alter table a",
+		output: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 	}, {
 		input:  "alter table a add column id int",
 		output: "alter table a",
@@ -958,19 +937,19 @@ var (
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table if not exists a (\n\ta int\n)",
 	}, {
-		input:  "create index a on b",
+		input:  "create index a on b (id)",
 		output: "alter table b",
 	}, {
-		input:  "create unique index a on b",
+		input:  "create unique index a on b (id)",
 		output: "alter table b",
 	}, {
-		input:  "create unique index a using foo on b",
+		input:  "create unique index a using foo on b (id)",
 		output: "alter table b",
 	}, {
-		input:  "create fulltext index a using foo on b",
+		input:  "create fulltext index a using foo on b (id)",
 		output: "alter table b",
 	}, {
-		input:  "create spatial index a using foo on b",
+		input:  "create spatial index a using foo on b (id)",
 		output: "alter table b",
 	}, {
 		input:  "create view a as select 1",
@@ -1336,7 +1315,7 @@ func TestValid(t *testing.T) {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
 			continue
@@ -1477,6 +1456,15 @@ func TestMySQL80RemovedSyntaxInvalid(t *testing.T) {
 		"alter table tbl_incomplete drop foreign key",
 		"alter table tbl_incomplete drop constraint",
 		"alter table tbl_incomplete rename key",
+		"alter table tbl_incomplete alter foo",
+		"alter table tbl_incomplete disable foo",
+		"alter table tbl_incomplete enable foo",
+		"alter table tbl_incomplete order foo",
+		"alter table tbl_incomplete default foo",
+		"alter table tbl_incomplete discard foo",
+		"alter table tbl_incomplete import foo",
+		"alter table tbl_incomplete foo",
+		"alter table tbl_incomplete convert",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {
@@ -1493,13 +1481,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input:  "create index b on A",
-		output: "alter table A",
-	}, {
-		input:  "alter table A foo",
-		output: "alter table A",
-	}, {
-		input:  "alter table A convert",
+		input:  "create index b on A (c)",
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
@@ -2090,7 +2072,7 @@ func TestCreateTable(t *testing.T) {
 	}
 	for _, sql := range validSQL {
 		sql = strings.TrimSpace(sql)
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", sql, err)
 			continue
@@ -2120,13 +2102,13 @@ func TestCreateTable(t *testing.T) {
 		},
 	}
 	for _, tcase := range strictMySQLCommentDBDDL {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		if got := String(tree); got != tcase.output {
-			t.Errorf("ParseStrictDDL(%s):\n%s, want\n%s", tcase.input, got, tcase.output)
+			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, tcase.output)
 		}
 	}
 
@@ -2140,9 +2122,27 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a rename column col_old to col_new, algorithm=instant, lock=none",
 	}
 	for _, sql := range validAlterTableOptionsSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree == nil || err != nil {
-			t.Errorf("ParseStrictDDL unexpectedly rejected input %s: %v", sql, err)
+			t.Errorf("Parse unexpectedly rejected input %s: %v", sql, err)
+		}
+	}
+
+	validDropIndexOptionsSQL := []string{
+		"drop index idx_a on tbl_a algorithm=inplace lock=none",
+		"drop index idx_a on tbl_a lock=shared algorithm=instant",
+		"drop index idx_a on tbl_a algorithm inplace lock none",
+		"drop index idx_a on tbl_a algorithm=inplace, lock=none",
+		"drop index idx_a on tbl_a lock shared, algorithm instant",
+	}
+	for _, sql := range validDropIndexOptionsSQL {
+		tree, err := Parse(sql)
+		if tree == nil || err != nil {
+			t.Errorf("Parse unexpectedly rejected input %s: %v", sql, err)
+			continue
+		}
+		if got := String(tree); got != "alter table tbl_a" {
+			t.Errorf("Parse(%s):\n%s, want\nalter table tbl_a", sql, got)
 		}
 	}
 
@@ -2155,9 +2155,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a drop constraint chk_a",
 	}
 	for _, sql := range validAlterTableRegressionSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree == nil || err != nil {
-			t.Errorf("ParseStrictDDL unexpectedly rejected input %s: %v", sql, err)
+			t.Errorf("Parse unexpectedly rejected input %s: %v", sql, err)
 		}
 	}
 
@@ -2190,9 +2190,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_gen_d change column col_prev col_gen int generated always as (col_src + 1) key stored",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree == nil || err != nil {
-			t.Errorf("ParseStrictDDL unexpectedly rejected multi-spec input %s: %v", sql, err)
+			t.Errorf("Parse unexpectedly rejected multi-spec input %s: %v", sql, err)
 		}
 	}
 
@@ -2209,9 +2209,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_pos6 add unique (col_a), modify column col_a varchar(16) first",
 	}
 	for _, sql := range validAlterTableColumnPositionSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree == nil || err != nil {
-			t.Errorf("ParseStrictDDL unexpectedly rejected column-position input %s: %v", sql, err)
+			t.Errorf("Parse unexpectedly rejected column-position input %s: %v", sql, err)
 		}
 	}
 
@@ -2232,21 +2232,20 @@ func TestCreateTable(t *testing.T) {
 		"create table tbl_expr_b (col_val int default (1 + 1), col_fn int default (coalesce(1, 2)))",
 	}
 	for _, sql := range validBooleanColumnDDL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree == nil || err != nil {
-			t.Errorf("ParseStrictDDL unexpectedly rejected boolean column DDL %s: %v", sql, err)
+			t.Errorf("Parse unexpectedly rejected boolean column DDL %s: %v", sql, err)
 		}
 	}
 
 	sql := "create table t garbage"
-	tree, err := Parse(sql)
-	if err != nil {
-		t.Errorf("input: %s, err: %v", sql, err)
+	if _, err := Parse(sql); err == nil {
+		t.Errorf("Parse unexpectedly accepted input %s", sql)
 	}
 
-	tree, err = ParseStrictDDL(sql)
+	tree, err := Parse(sql)
 	if tree != nil || err == nil {
-		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+		t.Errorf("Parse unexpectedly accepted input %s", sql)
 	}
 
 	invalidCreateTableGeneratedSQL := []string{
@@ -2256,9 +2255,9 @@ func TestCreateTable(t *testing.T) {
 		"create table t (total int generated always as (1) nonsense)",
 	}
 	for _, sql := range invalidCreateTableGeneratedSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2281,9 +2280,28 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=online",
 	}
 	for _, sql := range invalidAlterTableOptionsSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidDropIndexOptionsSQL := []string{
+		// ALGORITHM option requires a value.
+		"drop index idx_a on tbl_a algorithm=",
+		// LOCK option requires a value.
+		"drop index idx_a on tbl_a lock=",
+		// LOCK only accepts DEFAULT, NONE, SHARED, or EXCLUSIVE.
+		"drop index idx_a on tbl_a lock=fast",
+		// ALGORITHM only accepts DEFAULT, INSTANT, INPLACE, or COPY.
+		"drop index idx_a on tbl_a algorithm=online",
+		// Trailing comma after the final option is invalid.
+		"drop index idx_a on tbl_a algorithm=inplace, lock=none,",
+	}
+	for _, sql := range invalidDropIndexOptionsSQL {
+		tree, err := Parse(sql)
+		if tree != nil || err == nil {
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2310,9 +2328,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_l6 drop constraint, add column col_a int",
 	}
 	for _, sql := range invalidAlterTableMultiSpecSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted malformed multi-spec input %s", sql)
+			t.Errorf("Parse unexpectedly accepted malformed multi-spec input %s", sql)
 		}
 	}
 
@@ -2336,9 +2354,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_incomplete drop",
 	}
 	for _, sql := range invalidAlterTableIncompleteSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted incomplete alter-table input %s", sql)
+			t.Errorf("Parse unexpectedly accepted incomplete alter-table input %s", sql)
 		}
 	}
 
@@ -2357,9 +2375,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_pos_bad6 modify col_new int after",
 	}
 	for _, sql := range invalidAlterTableColumnPositionSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted malformed column-position input %s", sql)
+			t.Errorf("Parse unexpectedly accepted malformed column-position input %s", sql)
 		}
 	}
 
@@ -2388,9 +2406,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add constraint fk_parent key (parent_id) references parent (id)",
 	}
 	for _, sql := range invalidForeignKeySQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2401,9 +2419,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add constraint stable_id_uniq unique key",
 	}
 	for _, sql := range invalidAlterAddConstraintUniqueSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2418,9 +2436,9 @@ func TestCreateTable(t *testing.T) {
 		"create table t (id int, constraint primary key)",
 	}
 	for _, sql := range invalidCreateTableConstraintUniqueSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2443,9 +2461,9 @@ func TestCreateTable(t *testing.T) {
 		"create table t (id int) partition by range (id) (partition p0 values less than (10) storage = InnoDB)",
 	}
 	for _, sql := range invalidCreateTablePartitionSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2457,9 +2475,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add (id int default (coalesce(1, 2))",
 	}
 	for _, sql := range invalidDefaultExprSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2470,9 +2488,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add (b bool default (true or false)",
 	}
 	for _, sql := range invalidBooleanDefaultSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2491,9 +2509,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_attr_bad12 add column col_a int generated always as (col_b + 1) comment 'a' comment 'b'",
 	}
 	for _, sql := range invalidColumnAttributeDupSQL {
-		tree, err := ParseStrictDDL(sql)
+		tree, err := Parse(sql)
 		if tree != nil || err == nil {
-			t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
 		}
 	}
 
@@ -2776,7 +2794,7 @@ func TestCreateTable(t *testing.T) {
 	},
 	}
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
@@ -2791,7 +2809,7 @@ func TestCreateTable(t *testing.T) {
 		"drop index status on t",
 	}
 	for _, sql := range keywordIndexDDLs {
-		if _, err := ParseStrictDDL(sql); err != nil {
+		if _, err := Parse(sql); err != nil {
 			t.Errorf("input: %s, err: %v", sql, err)
 		}
 	}
@@ -2815,7 +2833,7 @@ func TestCreateTableEscaped(t *testing.T) {
 			")",
 	}}
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
+		tree, err := Parse(tcase.input)
 		if err != nil {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue

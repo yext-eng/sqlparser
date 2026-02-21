@@ -98,9 +98,10 @@ func TestParseNextErrors(t *testing.T) {
 // TestParseNextEdgeCases tests various ParseNext edge cases.
 func TestParseNextEdgeCases(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  []string
+		name     string
+		input    string
+		want     []string
+		firstErr string
 	}{{
 		name:  "Trailing ;",
 		input: "select 1 from a; update a set b = 2;",
@@ -126,19 +127,29 @@ func TestParseNextEdgeCases(t *testing.T) {
 		input: "set character set ';'; select 1 from a",
 		want:  []string{"set charset ';'", "select 1 from a"},
 	}, {
-		name:  "Partial DDL",
-		input: "create table a; select 1 from a",
-		want:  []string{"create table a", "select 1 from a"},
+		name:     "Invalid DDL",
+		input:    "create table a; select 1 from a",
+		firstErr: "syntax error at position 15",
+		want:     []string{"select 1 from a"},
 	}, {
-		name:  "Partial DDL",
-		input: "create table a ignore me this is garbage; select 1 from a",
-		want:  []string{"create table a", "select 1 from a"},
+		name:     "Invalid DDL with trailing garbage",
+		input:    "create table a ignore me this is garbage; select 1 from a",
+		firstErr: "syntax error at position 22 near 'ignore'",
+		want:     []string{"select 1 from a"},
 	}}
 
 	for _, test := range tests {
 		tokens := NewStringTokenizer(test.input)
+		i := 0
 
-		for i, want := range test.want {
+		if test.firstErr != "" {
+			if _, err := ParseNext(tokens); err == nil || err.Error() != test.firstErr {
+				t.Fatalf("[%d] ParseNext(%q) err = %q, want %q", i, test.input, err, test.firstErr)
+			}
+			i++
+		}
+
+		for _, want := range test.want {
 			tree, err := ParseNext(tokens)
 			if err != nil {
 				t.Fatalf("[%d] ParseNext(%q) err = %q, want nil", i, test.input, err)
@@ -148,6 +159,7 @@ func TestParseNextEdgeCases(t *testing.T) {
 			if got := String(tree); got != want {
 				t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, test.input, got, want)
 			}
+			i++
 		}
 
 		// Read once more and it should be EOF.

@@ -538,8 +538,9 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <str> extended_opt full_opt from_database_opt tables_or_processlist
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
-%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt foreign_key_index_name_opt
+%type <empty> to_opt index_opt constraint_opt foreign_key_index_name_opt
 %type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec change_column_definition column_position_opt
+%type <empty> ddl_algorithm_option ddl_lock_option drop_index_option drop_index_options_opt drop_index_options
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -588,7 +589,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
-%type <indexOptions> index_option_list
+%type <indexOptions> index_option_list index_option_list_opt
 %type <str> reference_action reference_option
 %type <strs> reference_option_list reference_option_list_opt
 %type <partDefs> partition_definitions
@@ -916,7 +917,7 @@ create_statement:
     $1.OptSelect = $3
     $$ = $1
   }
-| CREATE constraint_opt INDEX sql_id using_opt ON table_name ddl_force_eof
+| CREATE constraint_opt INDEX sql_id using_opt ON table_name openb index_column_list closeb index_option_list_opt
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
@@ -929,11 +930,11 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName(), OptSelect: $7}
   }
-| CREATE DATABASE not_exists_opt ID ddl_force_eof
+| CREATE DATABASE not_exists_opt ID table_option_list
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
-| CREATE SCHEMA not_exists_opt ID ddl_force_eof
+| CREATE SCHEMA not_exists_opt ID table_option_list
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
@@ -1651,6 +1652,15 @@ index_option_list:
     $$ = append($$, $2)
   }
 
+index_option_list_opt:
+  {
+    $$ = nil
+  }
+| index_option_list
+  {
+    $$ = $1
+  }
+
 index_option:
   USING ID
   {
@@ -1820,11 +1830,7 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation force_eof
-  {
-    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
-  }
-| ALTER ignore_opt TABLE table_name alter_table_operation_list force_eof
+  ALTER ignore_opt TABLE table_name alter_table_operation_list
   {
     ddl := &DDL{Action: AlterStr, Table: $4, NewName: $4}
     if yylex.(*Tokenizer).partialDDL != nil {
@@ -1979,6 +1985,32 @@ column_position_opt:
   }
 
 alter_table_option:
+  ddl_algorithm_option
+  {
+    $$ = struct{}{}
+  }
+| ddl_lock_option
+  {
+    $$ = struct{}{}
+  }
+| AUTO_INCREMENT equal_opt INTEGRAL
+  {
+    $$ = struct{}{}
+  }
+| CHARACTER SET equal_opt table_opt_value
+  {
+    $$ = struct{}{}
+  }
+| DEFAULT CHARACTER SET equal_opt table_opt_value
+  {
+    $$ = struct{}{}
+  }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = struct{}{}
+  }
+
+ddl_algorithm_option:
   ALGORITHM equal_opt reserved_sql_id
   {
     if !$3.EqualString("default") && !$3.EqualString("instant") && !$3.EqualString("inplace") && !$3.EqualString("copy") {
@@ -1987,12 +2019,47 @@ alter_table_option:
     }
     $$ = struct{}{}
   }
-| LOCK equal_opt reserved_sql_id
+
+ddl_lock_option:
+  LOCK equal_opt reserved_sql_id
   {
     if !$3.EqualString("default") && !$3.EqualString("none") && !$3.EqualString("shared") && !$3.EqualString("exclusive") {
       yylex.Error("syntax error")
       return 1
     }
+    $$ = struct{}{}
+  }
+
+drop_index_options_opt:
+  {
+    $$ = struct{}{}
+  }
+| drop_index_options
+  {
+    $$ = struct{}{}
+  }
+
+drop_index_options:
+  drop_index_option
+  {
+    $$ = struct{}{}
+  }
+| drop_index_options drop_index_option
+  {
+    $$ = struct{}{}
+  }
+| drop_index_options ',' drop_index_option
+  {
+    $$ = struct{}{}
+  }
+
+drop_index_option:
+  ddl_algorithm_option
+  {
+    $$ = struct{}{}
+  }
+| ddl_lock_option
+  {
     $$ = struct{}{}
   }
 
@@ -2021,6 +2088,14 @@ partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
   {
     $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+  }
+| PARTITION BY RANGE openb value_expression closeb openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: PartitionByRangeStr, Expr: $5, Definitions: $8}
+  }
+| PARTITION BY RANGE COLUMNS openb column_list closeb openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: PartitionByRangeStr, IsColumns: true, ColumnList: $6, Definitions: $9}
   }
 
 partition_opt:
@@ -2171,12 +2246,12 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
   }
-| DROP INDEX sql_id ON table_name ddl_force_eof
+| DROP INDEX sql_id ON table_name drop_index_options_opt
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
   }
-| DROP VIEW exists_opt table_name ddl_force_eof
+| DROP VIEW exists_opt table_name
   {
     var exists bool
         if $3 != 0 {
@@ -4082,28 +4157,6 @@ ignore_opt:
   { $$ = "" }
 | IGNORE
   { $$ = IgnoreStr }
-
-non_add_drop_or_rename_operation:
-  ALTER
-  { $$ = struct{}{} }
-| AUTO_INCREMENT
-  { $$ = struct{}{} }
-| CHARACTER
-  { $$ = struct{}{} }
-| COMMENT_KEYWORD
-  { $$ = struct{}{} }
-| DEFAULT
-  { $$ = struct{}{} }
-| ORDER
-  { $$ = struct{}{} }
-| CONVERT
-  { $$ = struct{}{} }
-| PARTITION
-  { $$ = struct{}{} }
-| UNUSED
-  { $$ = struct{}{} }
-| ID
-  { $$ = struct{}{} }
 
 to_opt:
   { $$ = struct{}{} }

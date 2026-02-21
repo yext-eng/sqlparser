@@ -2194,6 +2194,13 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_gen_b add column col_gen int generated always as (col_src + 1) not null stored",
 		"alter table tbl_gen_c modify column col_gen int generated always as (col_src + 1) comment 'derived' stored",
 		"alter table tbl_gen_d change column col_prev col_gen int generated always as (col_src + 1) key stored",
+		"alter table tbl_alt_c1 alter column col_a drop default",
+		"alter table tbl_alt_c2 alter col_a drop default",
+		"alter table tbl_alt_c3 alter column col_a set default 0",
+		"alter table tbl_alt_c4 alter col_a set default (1 + 1)",
+		"alter table tbl_alt_c5 alter column col_a set visible",
+		"alter table tbl_alt_c6 alter col_a set invisible",
+		"alter table tbl_alt_c7 drop key idx_a, alter column col_a drop default, lock=shared",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
 		tree, err := Parse(sql)
@@ -2342,6 +2349,16 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_l5 add column col_a int, rename column col_b col_c",
 		// DROP CONSTRAINT requires a constraint identifier before the next item.
 		"alter table tbl_l6 drop constraint, add column col_a int",
+		// ALTER COLUMN requires an action.
+		"alter table tbl_l7 alter column col_a",
+		// SET DEFAULT requires a default expression.
+		"alter table tbl_l8 alter col_a set default",
+		// ALTER COLUMN DEFAULT requires the SET keyword.
+		"alter table tbl_l9 alter column col_a default 1",
+		// Visibility changes require SET.
+		"alter table tbl_l10 alter column col_a visible",
+		// DROP requires a following keyword.
+		"alter table tbl_l11 alter col_a drop",
 	}
 	for _, sql := range invalidAlterTableMultiSpecSQL {
 		tree, err := Parse(sql)

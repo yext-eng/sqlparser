@@ -529,7 +529,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <bytes> show_generic_type
 %type <byt> exists_opt not_exists_opt
 %type <empty> to_opt index_opt constraint_opt foreign_key_index_name_opt
-%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec change_column_definition column_position_opt convert_to_character_set_option
+%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec alter_column_keyword_opt alter_column_action change_column_definition column_position_opt convert_to_character_set_option
 %type <empty> ddl_algorithm_option ddl_lock_option drop_index_option drop_index_options_opt drop_index_options
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -1934,7 +1934,34 @@ alter_table_spec:
   {
     $$ = struct{}{}
   }
+| ALTER alter_column_keyword_opt sql_id alter_column_action
+  {
+    $$ = struct{}{}
+  }
 | alter_table_rename_spec
+  {
+    $$ = struct{}{}
+  }
+
+alter_column_keyword_opt:
+  {
+    $$ = struct{}{}
+  }
+| COLUMN
+  {
+    $$ = struct{}{}
+  }
+
+alter_column_action:
+  SET DEFAULT value_expression
+  {
+    $$ = struct{}{}
+  }
+| DROP DEFAULT
+  {
+    $$ = struct{}{}
+  }
+| SET column_visibility_attr
   {
     $$ = struct{}{}
   }

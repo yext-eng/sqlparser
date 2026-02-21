@@ -401,9 +401,11 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %token <empty> ASSIGN
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD AFTER ALGORITHM FIRST
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD AFTER ALGORITHM FIRST ROW_FORMAT
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE CHANGE MODIFY
+%token <bytes> AVG_ROW_LENGTH CHECKSUM COMPRESSION CONNECTION DELAY_KEY_WRITE ENCRYPTION INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES
+%token <bytes> DYNAMIC FIXED COMPRESSED REDUNDANT COMPACT
+%token <bytes> SHOW DESCRIBE EXPLAIN DATA DATE DIRECTORY ESCAPE REPAIR OPTIMIZE TRUNCATE CHANGE MODIFY
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> DISCARD IMPORT TABLESPACE COALESCE EXCHANGE REBUILD VALIDATION WITHOUT REMOVE PARTITIONING
 %token <bytes> STATUS VARIABLES
@@ -572,8 +574,10 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <str> index_or_key_opt
 %type <colIdent> index_name_opt
 %type <str> equal_opt
+%type <colIdent> ddl_row_format_value
 %type <TableSpec> table_spec table_column_list
-%type <str> table_option_list table_option table_opt_value
+%type <str> table_option_list table_option common_table_option common_table_single_option common_collate_suffix_opt tablespace_storage_opt table_opt_value common_table_row_format_option
+%type <colIdent> common_table_single_option_name
 %type <indexInfo> index_info
 %type <indexInfo> alter_index_info
 %type <bytes> index_kind
@@ -1665,7 +1669,7 @@ equal_opt:
   }
 | '='
   {
-    $$ = string($1)
+    $$ = "="
   }
 
 index_info:
@@ -1776,25 +1780,218 @@ table_option_list:
   {
     $$ = " " + string($1)
   }
+| table_option_list table_option
+  {
+    $$ = string($1) + " " + string($2)
+  }
 | table_option_list ',' table_option
   {
     $$ = string($1) + ", " + string($3)
   }
 
-// rather than explicitly parsing the various keywords for table options,
-// just accept any number of keywords, IDs, strings, numbers, and '='
+// Parse the supported CREATE/ALTER TABLE options explicitly.
 table_option:
-  table_opt_value
+  common_table_option
   {
     $$ = $1
   }
-| table_option table_opt_value
+
+common_table_option:
+  common_table_single_option
   {
-    $$ = $1 + " " + $2
+    $$ = $1
   }
-| table_option '=' table_opt_value
+| common_table_row_format_option
   {
-    $$ = $1 + "=" + $3
+    $$ = $1
+  }
+| CHARSET equal_opt table_opt_value common_collate_suffix_opt
+  {
+    if $2 == "" {
+      $$ = string($1) + " " + $3 + $4
+    } else {
+      $$ = string($1) + string($2) + $3 + $4
+    }
+  }
+| CHARACTER SET equal_opt table_opt_value common_collate_suffix_opt
+  {
+    if $3 == "" {
+      $$ = string($1) + " " + string($2) + " " + $4 + $5
+    } else {
+      $$ = string($1) + " " + string($2) + string($3) + $4 + $5
+    }
+  }
+| DEFAULT CHARSET equal_opt table_opt_value common_collate_suffix_opt
+  {
+    if $3 == "" {
+      $$ = string($1) + " " + string($2) + " " + $4 + $5
+    } else {
+      $$ = string($1) + " " + string($2) + string($3) + $4 + $5
+    }
+  }
+| DEFAULT CHARACTER SET equal_opt table_opt_value common_collate_suffix_opt
+  {
+    if $4 == "" {
+      $$ = string($1) + " " + string($2) + " " + string($3) + " " + $5 + $6
+    } else {
+      $$ = string($1) + " " + string($2) + " " + string($3) + string($4) + $5 + $6
+    }
+  }
+| COLLATE equal_opt table_opt_value
+  {
+    if $2 == "" {
+      $$ = string($1) + " " + $3
+    } else {
+      $$ = string($1) + string($2) + $3
+    }
+  }
+| DEFAULT COLLATE equal_opt table_opt_value
+  {
+    if $3 == "" {
+      $$ = string($1) + " " + string($2) + " " + $4
+    } else {
+      $$ = string($1) + " " + string($2) + string($3) + $4
+    }
+  }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    if $2 == "" {
+      $$ = string($1) + " '" + string($3) + "'"
+    } else {
+      $$ = string($1) + string($2) + "'" + string($3) + "'"
+    }
+  }
+| DATA DIRECTORY equal_opt STRING
+  {
+    if $3 == "" {
+      $$ = string($1) + " " + string($2) + " '" + string($4) + "'"
+    } else {
+      $$ = string($1) + " " + string($2) + string($3) + "'" + string($4) + "'"
+    }
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    if $3 == "" {
+      $$ = string($1) + " " + string($2) + " '" + string($4) + "'"
+    } else {
+      $$ = string($1) + " " + string($2) + string($3) + "'" + string($4) + "'"
+    }
+  }
+| TABLESPACE table_opt_value tablespace_storage_opt
+  {
+    $$ = string($1) + " " + $2 + $3
+  }
+
+common_table_single_option:
+  common_table_single_option_name equal_opt table_opt_value
+  {
+    if $2 == "" {
+      $$ = $1.String() + " " + $3
+    } else {
+      $$ = $1.String() + string($2) + $3
+    }
+  }
+
+common_table_single_option_name:
+  AUTO_INCREMENT
+  {
+    $$ = NewColIdent(string($1))
+  }
+| AVG_ROW_LENGTH
+  {
+    $$ = NewColIdent(string($1))
+  }
+| CHECKSUM
+  {
+    $$ = NewColIdent(string($1))
+  }
+| COMPRESSION
+  {
+    $$ = NewColIdent(string($1))
+  }
+| CONNECTION
+  {
+    $$ = NewColIdent(string($1))
+  }
+| DELAY_KEY_WRITE
+  {
+    $$ = NewColIdent(string($1))
+  }
+| ENCRYPTION
+  {
+    $$ = NewColIdent(string($1))
+  }
+| ENGINE
+  {
+    $$ = NewColIdent(string($1))
+  }
+| INSERT_METHOD
+  {
+    $$ = NewColIdent(string($1))
+  }
+| KEY_BLOCK_SIZE
+  {
+    $$ = NewColIdent(string($1))
+  }
+| MAX_ROWS
+  {
+    $$ = NewColIdent(string($1))
+  }
+| MIN_ROWS
+  {
+    $$ = NewColIdent(string($1))
+  }
+| PACK_KEYS
+  {
+    $$ = NewColIdent(string($1))
+  }
+| PASSWORD
+  {
+    $$ = NewColIdent(string($1))
+  }
+| STATS_AUTO_RECALC
+  {
+    $$ = NewColIdent(string($1))
+  }
+| STATS_PERSISTENT
+  {
+    $$ = NewColIdent(string($1))
+  }
+| STATS_SAMPLE_PAGES
+  {
+    $$ = NewColIdent(string($1))
+  }
+
+tablespace_storage_opt:
+  {
+    $$ = ""
+  }
+| STORAGE table_opt_value
+  {
+    $$ = " " + string($1) + " " + $2
+  }
+
+common_collate_suffix_opt:
+  {
+    $$ = ""
+  }
+| COLLATE equal_opt table_opt_value
+  {
+    if $2 == "" {
+      $$ = " " + string($1) + " " + $3
+    } else {
+      $$ = " " + string($1) + string($2) + $3
+    }
+  }
+
+common_table_row_format_option:
+  ROW_FORMAT equal_opt ddl_row_format_value
+  {
+    if $2 == "" {
+      $$ = string($1) + " " + $3.String()
+    } else {
+      $$ = string($1) + string($2) + $3.String()
+    }
   }
 
 table_opt_value:
@@ -1994,7 +2191,11 @@ column_position_opt:
   }
 
 alter_table_option:
-  ddl_algorithm_option
+  common_table_option
+  {
+    $$ = struct{}{}
+  }
+| ddl_algorithm_option
   {
     $$ = struct{}{}
   }
@@ -2002,27 +2203,7 @@ alter_table_option:
   {
     $$ = struct{}{}
   }
-| AUTO_INCREMENT equal_opt INTEGRAL
-  {
-    $$ = struct{}{}
-  }
-| ENGINE equal_opt table_opt_value
-  {
-    $$ = struct{}{}
-  }
-| CHARACTER SET equal_opt table_opt_value
-  {
-    $$ = struct{}{}
-  }
-| DEFAULT CHARACTER SET equal_opt table_opt_value
-  {
-    $$ = struct{}{}
-  }
 | convert_to_character_set_option
-  {
-    $$ = struct{}{}
-  }
-| COMMENT_KEYWORD equal_opt STRING
   {
     $$ = struct{}{}
   }
@@ -2051,6 +2232,32 @@ ddl_lock_option:
       return 1
     }
     $$ = struct{}{}
+  }
+
+ddl_row_format_value:
+  DEFAULT
+  {
+    $$ = NewColIdent(string($1))
+  }
+| DYNAMIC
+  {
+    $$ = NewColIdent(string($1))
+  }
+| FIXED
+  {
+    $$ = NewColIdent(string($1))
+  }
+| COMPRESSED
+  {
+    $$ = NewColIdent(string($1))
+  }
+| REDUNDANT
+  {
+    $$ = NewColIdent(string($1))
+  }
+| COMPACT
+  {
+    $$ = NewColIdent(string($1))
   }
 
 drop_index_options_opt:
@@ -4507,6 +4714,7 @@ non_reserved_keyword:
 | AGAINST
 | AFTER
 | ALWAYS
+| AVG_ROW_LENGTH
 | COALESCE
 | BEGIN
 | BIGINT
@@ -4517,25 +4725,36 @@ non_reserved_keyword:
 | CHAR
 | CHARACTER
 | CHARSET
+| CHECKSUM
 | COLLATION
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
+| COMPACT
+| COMPRESSION
+| COMPRESSED
+| CONNECTION
 | COLUMNS
 | CURRENT
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
+| DELAY_KEY_WRITE
 | DISCARD
+| DIRECTORY
 | DOUBLE
 | DUPLICATE
+| DYNAMIC
 | ENUM
 | ENGINE
 | ENGINES
+| ENCRYPTION
 | ERRORS
 | EXCHANGE
 | EXPANSION
 | EVENTS
+| FIXED
 | FIRST
 | FLOAT_TYPE
 | FOLLOWING
@@ -4551,6 +4770,7 @@ non_reserved_keyword:
 | INTEGER
 | INDEXES
 | IMPORT
+| INSERT_METHOD
 | ISOLATION
 | INVISIBLE
 | JSON
@@ -4566,10 +4786,12 @@ non_reserved_keyword:
 | LOCKED
 | LONGTEXT
 | MASTER
+| MAX_ROWS
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
 | MODE
+| MIN_ROWS
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
@@ -4585,6 +4807,8 @@ non_reserved_keyword:
 | OPTIMIZE
 | ORDINALITY
 | PARTITIONING
+| PACK_KEYS
+| PASSWORD
 | PATH
 | POINT
 | POLYGON
@@ -4605,10 +4829,12 @@ non_reserved_keyword:
 | REBUILD
 | REMOVE
 | REPEATABLE
+| REDUNDANT
 | RELAYLOG
 | REVOKE
 | ROLLBACK
 | ROW
+| ROW_FORMAT
 | ROWS
 | SESSION
 | SERIALIZABLE
@@ -4620,6 +4846,9 @@ non_reserved_keyword:
 | SPATIAL
 | START
 | STATUS
+| STATS_AUTO_RECALC
+| STATS_PERSISTENT
+| STATS_SAMPLE_PAGES
 | STORAGE
 | STORED
 | TABLESPACE

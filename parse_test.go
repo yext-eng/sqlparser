@@ -2293,6 +2293,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_alt_c5 alter column col_a set visible",
 		"alter table tbl_alt_c6 alter col_a set invisible",
 		"alter table tbl_alt_c7 drop key idx_a, alter column col_a drop default, lock=shared",
+		"alter table tbl_opt_a add column col_a int, row_format=dynamic",
+		"alter table tbl_opt_b row_format compact, algorithm=inplace, lock=none",
+		"alter table tbl_opt_c data directory '/tmp/tbl_data', index directory '/tmp/tbl_index', lock=none",
 	}
 	for _, sql := range validAlterTableMultiSpecSQL {
 		tree, err := Parse(sql)
@@ -2335,6 +2338,13 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_time_c modify column col_ts timestamp(3) not null default localtimestamp(3)",
 		"alter table tbl_expr_a add column col_val int default (1 + 1)",
 		"create table tbl_expr_b (col_val int default (1 + 1), col_fn int default (coalesce(1, 2)))",
+		"create table tbl_rf_a (col_a int) row_format=dynamic",
+		"create table tbl_rf_b (col_a int) row_format compact",
+		"create table tbl_rf_c (col_a int) row_format=default",
+		"create table tbl_rf_d (col_a int) row_format=fixed",
+		"create table tbl_rf_e (col_a int) row_format=compressed",
+		"create table tbl_rf_f (col_a int) row_format=redundant",
+		"create table tbl_rf_g (col_a int) row_format=compact",
 	}
 	for _, sql := range validBooleanColumnDDL {
 		tree, err := Parse(sql)
@@ -2360,6 +2370,21 @@ func TestCreateTable(t *testing.T) {
 		"create table t (total int generated always as (1) nonsense)",
 	}
 	for _, sql := range invalidCreateTableGeneratedSQL {
+		tree, err := Parse(sql)
+		if tree != nil || err == nil {
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidCreateTableOptionsSQL := []string{
+		// ROW_FORMAT requires a value.
+		"create table tbl_rf_bad_a (col_a int) row_format=",
+		// ROW_FORMAT only accepts DEFAULT, DYNAMIC, FIXED, COMPRESSED, REDUNDANT, or COMPACT.
+		"create table tbl_rf_bad_b (col_a int) row_format=fast",
+		// ROW_FORMAT must be followed by exactly one value.
+		"create table tbl_rf_bad_c (col_a int) row_format dynamic compressed",
+	}
+	for _, sql := range invalidCreateTableOptionsSQL {
 		tree, err := Parse(sql)
 		if tree != nil || err == nil {
 			t.Errorf("Parse unexpectedly accepted input %s", sql)
@@ -2393,6 +2418,10 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b), lock=fast",
 		// ALGORITHM only accepts DEFAULT, INSTANT, INPLACE, or COPY.
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=online",
+		// ROW_FORMAT option requires a value.
+		"alter table tbl_a add index idx_ab (col_a, col_b), row_format=",
+		// ROW_FORMAT only accepts DEFAULT, DYNAMIC, FIXED, COMPRESSED, REDUNDANT, or COMPACT.
+		"alter table tbl_a add index idx_ab (col_a, col_b), row_format=fast",
 	}
 	for _, sql := range invalidAlterTableOptionsSQL {
 		tree, err := Parse(sql)

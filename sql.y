@@ -538,7 +538,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <str> extended_opt full_opt from_database_opt tables_or_processlist
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
-%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt foreign_key_index_name_opt
 %type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec change_column_definition column_position_opt
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -1553,19 +1553,28 @@ constraint_definition:
   }
 
 foreign_key_definition:
-  FOREIGN KEY openb column_list closeb reference_definition
+  FOREIGN KEY foreign_key_index_name_opt openb column_list closeb reference_definition
   {
-    if $6 == nil {
+    if $7 == nil {
       yylex.(*Tokenizer).Error("missing reference definition")
       return 1
     }
     $$ = &ConstraintDefinition{
-      ForeignKeyColumns: $4,
-      ReferencedTable: $6.ReferencedTable,
-      ReferencedColumns: $6.ReferencedColumns,
-      OnDeleteAction: $6.OnDeleteAction,
-      OnUpdateAction: $6.OnUpdateAction,
+      ForeignKeyColumns: $5,
+      ReferencedTable: $7.ReferencedTable,
+      ReferencedColumns: $7.ReferencedColumns,
+      OnDeleteAction: $7.OnDeleteAction,
+      OnUpdateAction: $7.OnUpdateAction,
     }
+  }
+
+foreign_key_index_name_opt:
+  {
+    $$ = struct{}{}
+  }
+| sql_id
+  {
+    $$ = struct{}{}
   }
 
 reference_definition:

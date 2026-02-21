@@ -2151,6 +2151,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b)",
 		"alter table tbl_a add (col_a int)",
 		"alter table tbl_a drop foreign key fk_ab",
+		"alter table tbl_a add foreign key fk_ab (col_a) references tbl_b (col_b)",
 		"alter table tbl_a drop constraint chk_a",
 	}
 	for _, sql := range validAlterTableRegressionSQL {
@@ -2165,6 +2166,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_c add index idx_c1 (c1), drop index idx_c1",
 		"alter table tbl_c2 drop column c2",
 		"alter table tbl_d add (c4 int), drop foreign key fk_c4",
+		"alter table tbl_e2 add foreign key fk_e2 (c1) references tbl_ref_e2 (id), drop key idx_e2",
 		"alter table tbl_drop_chk drop constraint chk_a, add column col_a int null",
 		"alter table tbl_h add index idx_c6 (c6), lock shared, algorithm inplace",
 		"alter table tbl_i drop key idx_c7, modify c7 varchar(128) not null, add column c8 binary(16) not null, add unique (c8)",
@@ -2370,6 +2372,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add foreign key (parent_id) references parent",
 		// Local FK columns must appear as a parenthesized list after FOREIGN KEY.
 		"alter table t add foreign key parent_id references parent (id)",
+		// FK index name still requires a local parenthesized column list.
+		"alter table t add foreign key fk_parent references parent (id)",
 		// Inline REFERENCES also requires a referenced column list.
 		"create table t (parent_id int references parent)",
 		// Inline referenced columns must be enclosed in parentheses.

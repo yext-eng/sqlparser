@@ -1905,6 +1905,10 @@ alter_table_spec:
     setDDL(yylex, &DDL{AlterDropForeignKey: $4})
     $$ = struct{}{}
   }
+| DROP CONSTRAINT sql_id
+  {
+    $$ = struct{}{}
+  }
 | DROP PRIMARY KEY
   {
     $$ = struct{}{}

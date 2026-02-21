@@ -2135,6 +2135,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm inplace, lock none",
 		"alter table tbl_a add constraint uq_ab unique key idx_ab (col_a, col_b), lock=shared",
 		"alter table tbl_a drop index idx_ab, lock=shared",
+		"alter table tbl_a drop constraint chk_a, lock=shared",
 		"alter table tbl_a rename index idx_old to idx_new, algorithm=instant",
 		"alter table tbl_a rename column col_old to col_new, algorithm=instant, lock=none",
 	}
@@ -2150,6 +2151,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b)",
 		"alter table tbl_a add (col_a int)",
 		"alter table tbl_a drop foreign key fk_ab",
+		"alter table tbl_a drop constraint chk_a",
 	}
 	for _, sql := range validAlterTableRegressionSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2163,6 +2165,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_c add index idx_c1 (c1), drop index idx_c1",
 		"alter table tbl_c2 drop column c2",
 		"alter table tbl_d add (c4 int), drop foreign key fk_c4",
+		"alter table tbl_drop_chk drop constraint chk_a, add column col_a int null",
 		"alter table tbl_h add index idx_c6 (c6), lock shared, algorithm inplace",
 		"alter table tbl_i drop key idx_c7, modify c7 varchar(128) not null, add column c8 binary(16) not null, add unique (c8)",
 		"alter table tbl_m drop key idx_c9, modify column c9 varchar(64) not null, add unique (c9)",
@@ -2299,6 +2302,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_l4 add column col_a int, rename column col_b to",
 		// RENAME COLUMN requires the TO keyword.
 		"alter table tbl_l5 add column col_a int, rename column col_b col_c",
+		// DROP CONSTRAINT requires a constraint identifier before the next item.
+		"alter table tbl_l6 drop constraint, add column col_a int",
 	}
 	for _, sql := range invalidAlterTableMultiSpecSQL {
 		tree, err := ParseStrictDDL(sql)
@@ -2319,6 +2324,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_incomplete modify column col_a",
 		"alter table tbl_incomplete drop foreign key",
 		"alter table tbl_incomplete drop constraint",
+		"alter table tbl_incomplete drop constraint primary key",
 		"alter table tbl_incomplete rename key",
 		"alter table tbl_incomplete rename column",
 		"alter table tbl_incomplete rename column col_a",

@@ -1029,14 +1029,34 @@ func (node *DDL) walkSubtree(visit Visit) error {
 
 // Partition strings
 const (
-	ReorganizeStr       = "reorganize partition"
-	PartitionByRangeStr = "partition by range"
+	ReorganizeStr                 = "reorganize partition"
+	PartitionByRangeStr           = "partition by range"
+	AddPartitionStr               = "add partition"
+	DropPartitionStr              = "drop partition"
+	DiscardPartitionTablespaceStr = "discard partition"
+	ImportPartitionTablespaceStr  = "import partition"
+	TruncatePartitionStr          = "truncate partition"
+	CoalescePartitionStr          = "coalesce partition"
+	ExchangePartitionStr          = "exchange partition"
+	AnalyzePartitionStr           = "analyze partition"
+	CheckPartitionStr             = "check partition"
+	OptimizePartitionStr          = "optimize partition"
+	RebuildPartitionStr           = "rebuild partition"
+	RepairPartitionStr            = "repair partition"
+	RemovePartitioningStr         = "remove partitioning"
+	WithValidationStr             = "with validation"
+	WithoutValidationStr          = "without validation"
 )
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
 	Action      string
 	Name        ColIdent
+	Names       Partitions
+	All         bool
+	Number      string
+	Table       TableName
+	Validation  string
 	Expr        Expr
 	IsColumns   bool
 	ColumnList  Columns
@@ -1045,9 +1065,47 @@ type PartitionSpec struct {
 
 // Format formats the node.
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
+	formatPartitionTarget := func(names Partitions, all bool) {
+		if all {
+			buf.Myprintf("all")
+			return
+		}
+		for i, name := range names {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%v", name)
+		}
+	}
+
 	switch node.Action {
+	case AddPartitionStr:
+		buf.Myprintf("%s (", node.Action)
+	case DropPartitionStr, TruncatePartitionStr, AnalyzePartitionStr, CheckPartitionStr, OptimizePartitionStr, RebuildPartitionStr, RepairPartitionStr:
+		buf.Myprintf("%s ", node.Action)
+		formatPartitionTarget(node.Names, node.All)
+		return
+	case DiscardPartitionTablespaceStr, ImportPartitionTablespaceStr:
+		buf.Myprintf("%s ", node.Action)
+		formatPartitionTarget(node.Names, node.All)
+		buf.Myprintf(" tablespace")
+		return
+	case CoalescePartitionStr:
+		buf.Myprintf("%s %s", node.Action, node.Number)
+		return
+	case ExchangePartitionStr:
+		buf.Myprintf("%s %v with table %v", node.Action, node.Name, node.Table)
+		if node.Validation != "" {
+			buf.Myprintf(" %s", node.Validation)
+		}
+		return
+	case RemovePartitioningStr:
+		buf.Myprintf("%s", node.Action)
+		return
 	case ReorganizeStr:
-		buf.Myprintf("%s %v into (", node.Action, node.Name)
+		buf.Myprintf("%s ", node.Action)
+		formatPartitionTarget(node.Names, false)
+		buf.Myprintf(" into (")
 	case PartitionByRangeStr:
 		if node.IsColumns {
 			buf.Myprintf("%s columns %v (", node.Action, node.ColumnList)
@@ -1071,6 +1129,12 @@ func (node *PartitionSpec) walkSubtree(visit Visit) error {
 		return nil
 	}
 	if err := Walk(visit, node.Name); err != nil {
+		return err
+	}
+	if err := Walk(visit, node.Names); err != nil {
+		return err
+	}
+	if err := Walk(visit, node.Table); err != nil {
 		return err
 	}
 	if err := Walk(visit, node.Expr); err != nil {

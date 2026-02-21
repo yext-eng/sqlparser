@@ -852,6 +852,78 @@ var (
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 	}, {
+		input:  "alter table tbl_part add partition (partition p2 values less than (100))",
+		output: "alter table tbl_part add partition (partition p2 values less than (100))",
+	}, {
+		input:  "alter table tbl_part drop partition p0, p1",
+		output: "alter table tbl_part drop partition p0, p1",
+	}, {
+		input:  "alter table tbl_part discard partition p0, p1 tablespace",
+		output: "alter table tbl_part discard partition p0, p1 tablespace",
+	}, {
+		input:  "alter table tbl_part discard partition all tablespace",
+		output: "alter table tbl_part discard partition all tablespace",
+	}, {
+		input:  "alter table tbl_part import partition p0, p1 tablespace",
+		output: "alter table tbl_part import partition p0, p1 tablespace",
+	}, {
+		input:  "alter table tbl_part import partition all tablespace",
+		output: "alter table tbl_part import partition all tablespace",
+	}, {
+		input:  "alter table tbl_part truncate partition p0, p1",
+		output: "alter table tbl_part truncate partition p0, p1",
+	}, {
+		input:  "alter table tbl_part truncate partition all",
+		output: "alter table tbl_part truncate partition all",
+	}, {
+		input:  "alter table tbl_part coalesce partition 2",
+		output: "alter table tbl_part coalesce partition 2",
+	}, {
+		input:  "alter table tbl_part reorganize partition p0, p1 into (partition p2 values less than (maxvalue))",
+		output: "alter table tbl_part reorganize partition p0, p1 into (partition p2 values less than (maxvalue))",
+	}, {
+		input:  "alter table tbl_part exchange partition p0 with table tbl_ex with validation",
+		output: "alter table tbl_part exchange partition p0 with table tbl_ex with validation",
+	}, {
+		input:  "alter table tbl_part exchange partition p0 with table tbl_ex without validation",
+		output: "alter table tbl_part exchange partition p0 with table tbl_ex without validation",
+	}, {
+		input:  "alter table tbl_part exchange partition p0 with table tbl_ex",
+		output: "alter table tbl_part exchange partition p0 with table tbl_ex",
+	}, {
+		input:  "alter table tbl_part analyze partition p0, p1",
+		output: "alter table tbl_part analyze partition p0, p1",
+	}, {
+		input:  "alter table tbl_part analyze partition all",
+		output: "alter table tbl_part analyze partition all",
+	}, {
+		input:  "alter table tbl_part check partition p0, p1",
+		output: "alter table tbl_part check partition p0, p1",
+	}, {
+		input:  "alter table tbl_part check partition all",
+		output: "alter table tbl_part check partition all",
+	}, {
+		input:  "alter table tbl_part optimize partition p0, p1",
+		output: "alter table tbl_part optimize partition p0, p1",
+	}, {
+		input:  "alter table tbl_part optimize partition all",
+		output: "alter table tbl_part optimize partition all",
+	}, {
+		input:  "alter table tbl_part rebuild partition p0, p1",
+		output: "alter table tbl_part rebuild partition p0, p1",
+	}, {
+		input:  "alter table tbl_part rebuild partition all",
+		output: "alter table tbl_part rebuild partition all",
+	}, {
+		input:  "alter table tbl_part repair partition p0, p1",
+		output: "alter table tbl_part repair partition p0, p1",
+	}, {
+		input:  "alter table tbl_part repair partition all",
+		output: "alter table tbl_part repair partition all",
+	}, {
+		input:  "alter table tbl_part remove partitioning",
+		output: "alter table tbl_part remove partitioning",
+	}, {
 		input:  "alter table a add column id int",
 		output: "alter table a",
 	}, {
@@ -2159,6 +2231,9 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a drop foreign key fk_ab",
 		"alter table tbl_a add foreign key fk_ab (col_a) references tbl_b (col_b)",
 		"alter table tbl_a drop constraint chk_a",
+		"alter table tbl_a remove partitioning",
+		"alter table tbl_a analyze partition all",
+		"alter table tbl_a exchange partition p0 with table tbl_b without validation",
 	}
 	for _, sql := range validAlterTableRegressionSQL {
 		tree, err := Parse(sql)
@@ -2303,6 +2378,37 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=online",
 	}
 	for _, sql := range invalidAlterTableOptionsSQL {
+		tree, err := Parse(sql)
+		if tree != nil || err == nil {
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidAlterTablePartitionSQL := []string{
+		// REMOVE PARTITIONING must include PARTITIONING.
+		"alter table tbl_part remove",
+		// ADD PARTITION requires parenthesized partition definitions.
+		"alter table tbl_part add partition partition p0 values less than (10)",
+		// DROP PARTITION requires at least one partition name.
+		"alter table tbl_part drop partition",
+		// DISCARD PARTITION requires a partition list or ALL.
+		"alter table tbl_part discard partition tablespace",
+		// IMPORT PARTITION requires TABLESPACE.
+		"alter table tbl_part import partition all",
+		// TRUNCATE PARTITION requires a partition list or ALL.
+		"alter table tbl_part truncate partition",
+		// COALESCE PARTITION requires a numeric argument.
+		"alter table tbl_part coalesce partition",
+		// EXCHANGE PARTITION validation clause must be complete.
+		"alter table tbl_part exchange partition p0 with table tbl_ex with",
+		// Partition maintenance operations require partition names or ALL.
+		"alter table tbl_part analyze partition",
+		"alter table tbl_part check partition",
+		"alter table tbl_part optimize partition",
+		"alter table tbl_part rebuild partition",
+		"alter table tbl_part repair partition",
+	}
+	for _, sql := range invalidAlterTablePartitionSQL {
 		tree, err := Parse(sql)
 		if tree != nil || err == nil {
 			t.Errorf("Parse unexpectedly accepted input %s", sql)

@@ -405,6 +405,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %token <bytes> SCHEMA TABLE TEMPORARY INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN CONSTRAINT CHECK SPATIAL FULLTEXT FOREIGN REFERENCES KEY_BLOCK_SIZE
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE CHANGE MODIFY
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
+%token <bytes> DISCARD IMPORT TABLESPACE COALESCE EXCHANGE REBUILD VALIDATION WITHOUT REMOVE PARTITIONING
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
 %token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
@@ -465,7 +466,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <bytes2> comment_opt comment_list
 %type <str> union_op union_or_except_op intersect_op except_op insert_or_replace
 %type <str> recursive_opt
-%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
+%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt validation_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
@@ -516,7 +517,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <limit> limit_opt
 %type <str> lock_opt lock_modifier_opt
 %type <columns> ins_column_list column_list
-%type <partitions> opt_partition_clause partition_list
+%type <partitions> opt_partition_clause partition_list partition_name_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list transaction_chars
@@ -2116,9 +2117,97 @@ add_constraint_object:
   }
 
 partition_operation:
-  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+  ADD PARTITION openb partition_definitions closeb
   {
-    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+    $$ = &PartitionSpec{Action: AddPartitionStr, Definitions: $4}
+  }
+| DROP PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: DropPartitionStr, Names: $3}
+  }
+| DISCARD PARTITION partition_name_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardPartitionTablespaceStr, Names: $3}
+  }
+| DISCARD PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: DiscardPartitionTablespaceStr, All: true}
+  }
+| IMPORT PARTITION partition_name_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportPartitionTablespaceStr, Names: $3}
+  }
+| IMPORT PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action: ImportPartitionTablespaceStr, All: true}
+  }
+| TRUNCATE PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: TruncatePartitionStr, Names: $3}
+  }
+| TRUNCATE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: TruncatePartitionStr, All: true}
+  }
+| COALESCE PARTITION INTEGRAL
+  {
+    $$ = &PartitionSpec{Action: CoalescePartitionStr, Number: string($3)}
+  }
+| REORGANIZE PARTITION partition_name_list INTO openb partition_definitions closeb
+  {
+    spec := &PartitionSpec{Action: ReorganizeStr, Names: $3, Definitions: $6}
+    if len($3) > 0 {
+      spec.Name = $3[0]
+    }
+    $$ = spec
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name validation_opt
+  {
+    $$ = &PartitionSpec{Action: ExchangePartitionStr, Name: $3, Table: $6, Validation: $7}
+  }
+| ANALYZE PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: AnalyzePartitionStr, Names: $3}
+  }
+| ANALYZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: AnalyzePartitionStr, All: true}
+  }
+| CHECK PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: CheckPartitionStr, Names: $3}
+  }
+| CHECK PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: CheckPartitionStr, All: true}
+  }
+| OPTIMIZE PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: OptimizePartitionStr, Names: $3}
+  }
+| OPTIMIZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: OptimizePartitionStr, All: true}
+  }
+| REBUILD PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: RebuildPartitionStr, Names: $3}
+  }
+| REBUILD PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RebuildPartitionStr, All: true}
+  }
+| REPAIR PARTITION partition_name_list
+  {
+    $$ = &PartitionSpec{Action: RepairPartitionStr, Names: $3}
+  }
+| REPAIR PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action: RepairPartitionStr, All: true}
+  }
+| REMOVE PARTITIONING
+  {
+    $$ = &PartitionSpec{Action: RemovePartitioningStr}
   }
 | PARTITION BY RANGE openb value_expression closeb openb partition_definitions closeb
   {
@@ -2929,6 +3018,25 @@ partition_list:
 | partition_list ',' sql_id
   {
     $$ = append($$, $3)
+  }
+
+partition_name_list:
+  partition_list
+  {
+    $$ = $1
+  }
+
+validation_opt:
+  {
+    $$ = ""
+  }
+| WITH VALIDATION
+  {
+    $$ = WithValidationStr
+  }
+| WITHOUT VALIDATION
+  {
+    $$ = WithoutValidationStr
   }
 
 // There is a grammar conflict here:
@@ -4395,6 +4503,7 @@ non_reserved_keyword:
 | AGAINST
 | AFTER
 | ALWAYS
+| COALESCE
 | BEGIN
 | BIGINT
 | BINLOG
@@ -4413,12 +4522,14 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DECIMAL
+| DISCARD
 | DOUBLE
 | DUPLICATE
 | ENUM
 | ENGINE
 | ENGINES
 | ERRORS
+| EXCHANGE
 | EXPANSION
 | EVENTS
 | FIRST
@@ -4435,6 +4546,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INDEXES
+| IMPORT
 | ISOLATION
 | INVISIBLE
 | JSON
@@ -4468,6 +4580,7 @@ non_reserved_keyword:
 | OPTION
 | OPTIMIZE
 | ORDINALITY
+| PARTITIONING
 | PATH
 | POINT
 | POLYGON
@@ -4485,6 +4598,8 @@ non_reserved_keyword:
 | REAL
 | REORGANIZE
 | REPAIR
+| REBUILD
+| REMOVE
 | REPEATABLE
 | RELAYLOG
 | REVOKE
@@ -4503,6 +4618,7 @@ non_reserved_keyword:
 | STATUS
 | STORAGE
 | STORED
+| TABLESPACE
 | TEXT
 | THAN
 | TIME
@@ -4519,6 +4635,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | VARBINARY
+| VALIDATION
 | VARCHAR
 | VARIABLES
 | VIEW
@@ -4526,6 +4643,7 @@ non_reserved_keyword:
 | VIRTUAL
 | WARNINGS
 | WITH
+| WITHOUT
 | WRITE
 | YEAR
 | ZEROFILL

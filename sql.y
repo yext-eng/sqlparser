@@ -4161,8 +4161,7 @@ reserved_table_id:
   Sorted alphabetically
 */
 reserved_keyword:
-  ACTION
-| ADD
+  ADD
 | AND
 | AS
 | ASC
@@ -4273,7 +4272,8 @@ reserved_keyword:
   Sorted alphabetically
 */
 non_reserved_keyword:
-  AGAINST
+  ACTION
+| AGAINST
 | AFTER
 | ALWAYS
 | BEGIN

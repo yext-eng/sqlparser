@@ -2224,6 +2224,23 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	validCreateIndexOptionsSQL := []string{
+		"create index idx_a on tbl_a (col_a) algorithm=inplace lock=none",
+		"create index idx_a on tbl_a (col_a) lock=shared algorithm=instant",
+		"create index idx_a on tbl_a (col_a) algorithm inplace, lock none",
+		"create index idx_a on tbl_a (col_a) using btree algorithm=inplace",
+	}
+	for _, sql := range validCreateIndexOptionsSQL {
+		tree, err := Parse(sql)
+		if tree == nil || err != nil {
+			t.Errorf("Parse unexpectedly rejected input %s: %v", sql, err)
+			continue
+		}
+		if got := String(tree); got != "alter table tbl_a" {
+			t.Errorf("Parse(%s):\n%s, want\nalter table tbl_a", sql, got)
+		}
+	}
+
 	// Regression coverage: existing ALTER TABLE forms should still parse without trailing options.
 	validAlterTableRegressionSQL := []string{
 		"alter table tbl_a add index idx_ab (col_a, col_b)",
@@ -2428,6 +2445,25 @@ func TestCreateTable(t *testing.T) {
 		"drop index idx_a on tbl_a algorithm=inplace, lock=none,",
 	}
 	for _, sql := range invalidDropIndexOptionsSQL {
+		tree, err := Parse(sql)
+		if tree != nil || err == nil {
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidCreateIndexOptionsSQL := []string{
+		// ALGORITHM option requires a value.
+		"create index idx_a on tbl_a (col_a) algorithm=",
+		// LOCK option requires a value.
+		"create index idx_a on tbl_a (col_a) lock=",
+		// LOCK only accepts DEFAULT, NONE, SHARED, or EXCLUSIVE.
+		"create index idx_a on tbl_a (col_a) lock=fast",
+		// ALGORITHM only accepts DEFAULT, INSTANT, INPLACE, or COPY.
+		"create index idx_a on tbl_a (col_a) algorithm=online",
+		// Trailing comma after the final option is invalid.
+		"create index idx_a on tbl_a (col_a) algorithm=inplace, lock=none,",
+	}
+	for _, sql := range invalidCreateIndexOptionsSQL {
 		tree, err := Parse(sql)
 		if tree != nil || err == nil {
 			t.Errorf("Parse unexpectedly accepted input %s", sql)

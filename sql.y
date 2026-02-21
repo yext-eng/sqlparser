@@ -531,7 +531,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <byt> exists_opt not_exists_opt
 %type <empty> to_opt index_opt constraint_opt foreign_key_index_name_opt
 %type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec alter_column_keyword_opt alter_column_action change_column_definition column_position_opt convert_to_character_set_option
-%type <empty> ddl_algorithm_option ddl_lock_option drop_index_option drop_index_options_opt drop_index_options
+%type <empty> ddl_algorithm_option ddl_lock_option create_drop_index_option create_drop_index_options_opt create_drop_index_options drop_index_options_opt
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -580,7 +580,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
-%type <indexOptions> index_option_list index_option_list_opt
+%type <indexOptions> index_option_list
 %type <str> reference_action reference_option
 %type <strs> reference_option_list reference_option_list_opt
 %type <partDefs> partition_definitions
@@ -908,7 +908,7 @@ create_statement:
     $1.OptSelect = $3
     $$ = $1
   }
-| CREATE constraint_opt INDEX sql_id using_opt ON table_name openb index_column_list closeb index_option_list_opt
+| CREATE constraint_opt INDEX sql_id using_opt ON table_name openb index_column_list closeb create_drop_index_options_opt
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
@@ -1643,15 +1643,6 @@ index_option_list:
     $$ = append($$, $2)
   }
 
-index_option_list_opt:
-  {
-    $$ = nil
-  }
-| index_option_list
-  {
-    $$ = $1
-  }
-
 index_option:
   USING ID
   {
@@ -2066,27 +2057,40 @@ drop_index_options_opt:
   {
     $$ = struct{}{}
   }
-| drop_index_options
+| create_drop_index_options
   {
     $$ = struct{}{}
   }
 
-drop_index_options:
-  drop_index_option
+create_drop_index_options_opt:
   {
     $$ = struct{}{}
   }
-| drop_index_options drop_index_option
-  {
-    $$ = struct{}{}
-  }
-| drop_index_options ',' drop_index_option
+| create_drop_index_options
   {
     $$ = struct{}{}
   }
 
-drop_index_option:
-  ddl_algorithm_option
+create_drop_index_options:
+  create_drop_index_option
+  {
+    $$ = struct{}{}
+  }
+| create_drop_index_options create_drop_index_option
+  {
+    $$ = struct{}{}
+  }
+| create_drop_index_options ',' create_drop_index_option
+  {
+    $$ = struct{}{}
+  }
+
+create_drop_index_option:
+  index_option
+  {
+    $$ = struct{}{}
+  }
+| ddl_algorithm_option
   {
     $$ = struct{}{}
   }

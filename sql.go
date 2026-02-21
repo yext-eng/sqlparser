@@ -5351,7 +5351,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1062
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
+			yyVAL.columnType = ColumnType{Type: keywordStrings[DOUBLE]}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -5359,7 +5359,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1068
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].bytes)}
+			yyVAL.columnType = ColumnType{Type: keywordStrings[FLOAT_TYPE]}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}

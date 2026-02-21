@@ -1060,13 +1060,13 @@ REAL float_length_opt
   }
 | DOUBLE float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: keywordStrings[DOUBLE]}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT_TYPE float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: keywordStrings[FLOAT_TYPE]}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }

@@ -189,8 +189,8 @@ var keywords = map[string]int{
 	"first":               FIRST,
 	"fetch":               UNUSED,
 	"float":               FLOAT_TYPE,
-	"float4":              UNUSED,
-	"float8":              UNUSED,
+	"float4":              FLOAT_TYPE,
+	"float8":              DOUBLE,
 	"following":           FOLLOWING,
 	"for":                 FOR,
 	"force":               FORCE,
@@ -457,6 +457,10 @@ func init() {
 		}
 		keywordStrings[id] = str
 	}
+
+	// Canonical spellings for tokens with accepted aliases.
+	keywordStrings[FLOAT_TYPE] = "float"
+	keywordStrings[DOUBLE] = "double"
 }
 
 // KeywordString returns the string corresponding to the given keyword

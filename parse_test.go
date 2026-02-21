@@ -2966,6 +2966,15 @@ func TestCreateTable(t *testing.T) {
 			"\talready_exists_and_equal tinyint(1) default null,\n" +
 			"\tkey update_id (update_id)\n" +
 			") engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci partition by range (update_id) (partition id20200000 values less than (20200000) engine InnoDB, partition latest values less than (maxvalue) engine InnoDB)",
+	}, {
+		input: "create table tbl_alias (\n" +
+			"	col_a float8 not null,\n" +
+			"	col_b float4\n" +
+			")",
+		output: "create table tbl_alias (\n" +
+			"\tcol_a double not null,\n" +
+			"\tcol_b float\n" +
+			")",
 	},
 	}
 	for _, tcase := range testCases {

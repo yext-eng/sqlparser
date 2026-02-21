@@ -168,6 +168,24 @@ func TestScanAssignAndBindVar(t *testing.T) {
 	}
 }
 
+func TestScanFloatAliases(t *testing.T) {
+	testcases := []struct {
+		in     string
+		wantID int
+		want   string
+	}{
+		{in: "float4", wantID: FLOAT_TYPE, want: "float4"},
+		{in: "float8", wantID: DOUBLE, want: "float8"},
+	}
+
+	for _, tcase := range testcases {
+		id, out := NewStringTokenizer(tcase.in).Scan()
+		if id != tcase.wantID || string(out) != tcase.want {
+			t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), out, tokenName(tcase.wantID), tcase.want)
+		}
+	}
+}
+
 func TestSplitStatement(t *testing.T) {
 	testcases := []struct {
 		in  string

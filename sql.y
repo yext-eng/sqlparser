@@ -67,18 +67,6 @@ func rejectDeprecatedSetVar(yylex interface{}, name ColIdent) bool {
   return false
 }
 
-func isAllowedGenericShowType(id []byte) bool {
-  switch NewColIdent(string(id)).Lowered() {
-  case "binlog", "collation", "engine", "engines", "errors", "events",
-    "function", "grants", "indexes", "master", "open", "plugins",
-    "privileges", "profile", "profiles", "relaylog", "slave", "storage",
-    "triggers", "warnings":
-    return true
-  default:
-    return false
-  }
-}
-
 type addConstraintObject struct {
   Constraint *ConstraintDefinition
   Index      *IndexDefinition
@@ -439,6 +427,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 
 // Supported SHOW tokens
 %token <bytes> DATABASES TABLES EXTENDED FULL PROCESSLIST
+%token <bytes> BINLOG COLLATION ENGINE ENGINES ERRORS EVENTS FUNCTION GRANTS INDEXES MASTER OPEN PLUGINS PRIVILEGES PROFILE PROFILES RELAYLOG SLAVE STORAGE TRIGGERS WARNINGS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -537,9 +526,10 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <str> ignore_opt default_opt
 %type <str> extended_opt full_opt from_database_opt tables_or_processlist
 %type <showFilter> like_or_where_opt
+%type <bytes> show_generic_type
 %type <byt> exists_opt not_exists_opt
 %type <empty> to_opt index_opt constraint_opt foreign_key_index_name_opt
-%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec change_column_definition column_position_opt
+%type <empty> alter_table_operation alter_table_operation_list alter_table_spec alter_table_option alter_table_rename_spec change_column_definition column_position_opt convert_to_character_set_option
 %type <empty> ddl_algorithm_option ddl_lock_option drop_index_option drop_index_options_opt drop_index_options
 %type <addConstraintObject> add_constraint_object
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -1997,6 +1987,10 @@ alter_table_option:
   {
     $$ = struct{}{}
   }
+| ENGINE equal_opt table_opt_value
+  {
+    $$ = struct{}{}
+  }
 | CHARACTER SET equal_opt table_opt_value
   {
     $$ = struct{}{}
@@ -2005,7 +1999,17 @@ alter_table_option:
   {
     $$ = struct{}{}
   }
+| convert_to_character_set_option
+  {
+    $$ = struct{}{}
+  }
 | COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = struct{}{}
+  }
+
+convert_to_character_set_option:
+  CONVERT TO charset_or_character_set charset_value collate_opt
   {
     $$ = struct{}{}
   }
@@ -2296,6 +2300,10 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
+| SHOW CREATE FUNCTION ddl_force_eof
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE ID ddl_force_eof
   {
@@ -2355,12 +2363,8 @@ show_statement:
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
-| SHOW ID ddl_force_eof
+| SHOW show_generic_type ddl_force_eof
   {
-    if !isAllowedGenericShowType($2) {
-      yylex.Error("invalid show statement")
-      return 1
-    }
     $$ = &Show{Type: string($2)}
   }
 
@@ -2373,6 +2377,28 @@ tables_or_processlist:
   {
     $$ = string($1)
   }
+
+show_generic_type:
+  BINLOG
+| COLLATION
+| ENGINE
+| ENGINES
+| ERRORS
+| EVENTS
+| FUNCTION
+| GRANTS
+| INDEXES
+| MASTER
+| OPEN
+| PLUGINS
+| PRIVILEGES
+| PROFILE
+| PROFILES
+| RELAYLOG
+| SLAVE
+| STORAGE
+| TRIGGERS
+| WARNINGS
 
 extended_opt:
   /* empty */
@@ -4344,12 +4370,14 @@ non_reserved_keyword:
 | ALWAYS
 | BEGIN
 | BIGINT
+| BINLOG
 | BIT
 | BLOB
 | BOOL
 | CHAR
 | CHARACTER
 | CHARSET
+| COLLATION
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
@@ -4361,18 +4389,25 @@ non_reserved_keyword:
 | DOUBLE
 | DUPLICATE
 | ENUM
+| ENGINE
+| ENGINES
+| ERRORS
 | EXPANSION
+| EVENTS
 | FIRST
 | FLOAT_TYPE
 | FOLLOWING
 | FOREIGN
+| FUNCTION
 | FULLTEXT
 | GENERATED
 | GEOMETRY
 | GEOMETRYCOLLECTION
 | GLOBAL
+| GRANTS
 | INT
 | INTEGER
+| INDEXES
 | ISOLATION
 | INVISIBLE
 | JSON
@@ -4387,6 +4422,7 @@ non_reserved_keyword:
 | LONGBLOB
 | LOCKED
 | LONGTEXT
+| MASTER
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
@@ -4400,6 +4436,7 @@ non_reserved_keyword:
 | NOWAIT
 | NUMERIC
 | OFFSET
+| OPEN
 | ONLY
 | OPTION
 | OPTIMIZE
@@ -4409,6 +4446,10 @@ non_reserved_keyword:
 | POLYGON
 | PRECEDING
 | PRIMARY
+| PRIVILEGES
+| PROFILE
+| PROFILES
+| PLUGINS
 | PROCEDURE
 | QUERY
 | RANGE
@@ -4418,6 +4459,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| RELAYLOG
 | REVOKE
 | ROLLBACK
 | ROW
@@ -4426,11 +4468,13 @@ non_reserved_keyword:
 | SERIALIZABLE
 | SHARE
 | SKIP
+| SLAVE
 | SIGNED
 | SMALLINT
 | SPATIAL
 | START
 | STATUS
+| STORAGE
 | STORED
 | TEXT
 | THAN
@@ -4441,6 +4485,7 @@ non_reserved_keyword:
 | TINYTEXT
 | TRANSACTION
 | TRIGGER
+| TRIGGERS
 | TRUNCATE
 | UNCOMMITTED
 | UNBOUNDED
@@ -4452,6 +4497,7 @@ non_reserved_keyword:
 | VIEW
 | VISIBLE
 | VIRTUAL
+| WARNINGS
 | WITH
 | WRITE
 | YEAR

@@ -2120,6 +2120,12 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a drop constraint chk_a, lock=shared",
 		"alter table tbl_a rename index idx_old to idx_new, algorithm=instant",
 		"alter table tbl_a rename column col_old to col_new, algorithm=instant, lock=none",
+		"alter table tbl_opt engine=innodb",
+		"alter table tbl_opt engine innodb",
+		"alter table tbl_opt convert to character set utf8mb4",
+		"alter table tbl_opt convert to character set utf8mb4 collate utf8mb4_unicode_ci",
+		"alter table tbl_opt add column col_x int, convert to character set utf8mb4 collate utf8mb4_unicode_ci, algorithm=instant, lock=none",
+		"alter table tbl_opt add column col_x int, engine=innodb, lock=shared",
 	}
 	for _, sql := range validAlterTableOptionsSQL {
 		tree, err := Parse(sql)
@@ -2266,10 +2272,20 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=",
 		// LOCK option requires a value.
 		"alter table tbl_a add index idx_ab (col_a, col_b), lock=",
+		// ENGINE option requires a value.
+		"alter table tbl_opt engine=",
+		// CONVERT TO CHARACTER SET requires a charset value.
+		"alter table tbl_opt convert to character set",
+		// CONVERT TO CHARACTER SET ... COLLATE requires a collation value.
+		"alter table tbl_opt convert to character set utf8mb4 collate",
 		// Trailing comma after alter options is invalid.
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace,",
 		// Trailing comma after the final alter option is invalid.
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace, lock=none,",
+		// Trailing comma after ENGINE is invalid.
+		"alter table tbl_opt engine=innodb,",
+		// Trailing comma after CONVERT TO CHARACTER SET is invalid.
+		"alter table tbl_opt convert to character set utf8mb4,",
 		// Unknown alter option key is invalid.
 		"alter table tbl_a add index idx_ab (col_a, col_b), optimizer=instant",
 		// Unknown alter option key is invalid even without '='.

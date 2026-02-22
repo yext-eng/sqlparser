@@ -2504,6 +2504,19 @@ func TestCreateTable(t *testing.T) {
 		}
 	}
 
+	validSpatialSRIDDDL := []string{
+		"create table tbl_geo_a (col_a point srid 4326 not null, spatial index idx_geo_a (col_a))",
+		"create table tbl_geo_b (col_a geometry srid 0, col_b linestring srid 3857, col_c multipolygon)",
+		"alter table tbl_geo_c add column col_a point srid 4326",
+		"alter table tbl_geo_d modify column col_a multipoint srid 4326 not null",
+	}
+	for _, sql := range validSpatialSRIDDDL {
+		tree, err := Parse(sql)
+		if tree == nil || err != nil {
+			t.Errorf("Parse unexpectedly rejected spatial SRID DDL %s: %v", sql, err)
+		}
+	}
+
 	sql := "create table t garbage"
 	if _, err := Parse(sql); err == nil {
 		t.Errorf("Parse unexpectedly accepted input %s", sql)
@@ -2847,6 +2860,19 @@ func TestCreateTable(t *testing.T) {
 		"alter table t add (b bool default (true or false)",
 	}
 	for _, sql := range invalidBooleanDefaultSQL {
+		tree, err := Parse(sql)
+		if tree != nil || err == nil {
+			t.Errorf("Parse unexpectedly accepted input %s", sql)
+		}
+	}
+
+	invalidSpatialSRIDSQL := []string{
+		"create table tbl_geo_bad1 (col_a point srid)",
+		"create table tbl_geo_bad2 (col_a point srid '4326')",
+		"alter table tbl_geo_bad3 add column col_a linestring srid",
+		"alter table tbl_geo_bad4 modify column col_a geometry srid ident_srid",
+	}
+	for _, sql := range invalidSpatialSRIDSQL {
 		tree, err := Parse(sql)
 		if tree != nil || err == nil {
 			t.Errorf("Parse unexpectedly accepted input %s", sql)

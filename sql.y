@@ -468,7 +468,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
-%token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
+%token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON SRID
 
 // Type Modifiers
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL GENERATED ALWAYS STORED VIRTUAL VISIBLE INVISIBLE
@@ -607,9 +607,11 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
+%type <bytes> spatial_base_type
 %type <optVal> length_opt column_comment_attr on_update_column_attr
 %type <expr> column_default_attr
 %type <optVal> current_timestamp_opt
+%type <optVal> spatial_srid_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
@@ -1264,37 +1266,28 @@ char_type:
   }
 
 spatial_type:
+  spatial_base_type spatial_srid_opt
+  {
+    $$ = ColumnType{Type: string($1), SRID: $2}
+  }
+
+spatial_base_type:
   GEOMETRY
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | POINT
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | LINESTRING
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | POLYGON
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | GEOMETRYCOLLECTION
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | MULTIPOINT
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | MULTILINESTRING
-  {
-    $$ = ColumnType{Type: string($1)}
-  }
 | MULTIPOLYGON
+
+spatial_srid_opt:
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = nil
+  }
+| SRID INTEGRAL
+  {
+    $$ = NewIntVal($2)
   }
 
 enum_values:
@@ -5149,6 +5142,7 @@ non_reserved_keyword:
 | SIGNED
 | SMALLINT
 | SPATIAL
+| SRID
 | START
 | STATUS
 | STATS_AUTO_RECALC

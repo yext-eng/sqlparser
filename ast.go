@@ -1388,6 +1388,8 @@ type ColumnType struct {
 	Unsigned BoolVal
 	Zerofill BoolVal
 	Scale    *SQLVal
+	// SRID is an optional spatial reference identifier for spatial column types.
+	SRID *SQLVal
 
 	// Text field options
 	Charset string
@@ -1433,6 +1435,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Zerofill {
 		opts = append(opts, keywordStrings[ZEROFILL])
+	}
+	if ct.SRID != nil {
+		opts = append(opts, keywordStrings[SRID], String(ct.SRID))
 	}
 	if ct.Charset != "" {
 		opts = append(opts, keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)

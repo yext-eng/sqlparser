@@ -186,6 +186,13 @@ func TestScanFloatAliases(t *testing.T) {
 	}
 }
 
+func TestScanSpatialSRIDKeyword(t *testing.T) {
+	id, out := NewStringTokenizer("srid").Scan()
+	if id != SRID || string(out) != "srid" {
+		t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", "srid", tokenName(id), out, tokenName(SRID), "srid")
+	}
+}
+
 func TestSplitStatement(t *testing.T) {
 	testcases := []struct {
 		in  string

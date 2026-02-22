@@ -1387,6 +1387,23 @@ var (
 	}, {
 		input: "revoke grant option for select, insert on appdb.* from 'app'@'localhost'",
 	}, {
+		input: "drop user 'acct_a'@'%', 'acct_b'@'localhost'",
+	}, {
+		input: "drop user if exists 'acct_a'@'%', 'acct_b'@'localhost'",
+	}, {
+		input: "drop role 'role_a', 'role_b'",
+	}, {
+		input: "drop role if exists 'role_a', 'role_b'",
+	}, {
+		input:  "drop role role_a@localhost",
+		output: "drop role 'role_a'@'localhost'",
+	}, {
+		input:  "drop role role_a@'localhost'",
+		output: "drop role 'role_a'@'localhost'",
+	}, {
+		input:  "drop role 'role_a'@localhost",
+		output: "drop role 'role_a'@'localhost'",
+	}, {
 		input: "create database test_db",
 	}, {
 		input:  "create schema test_db",
@@ -1522,6 +1539,11 @@ func TestGrantRevokeInvalid(t *testing.T) {
 		"grant select on appdb.users 'app'@'%'",
 		"revoke select on appdb.users to 'app'@'%'",
 		"revoke grant option select on appdb.users from 'app'@'%'",
+		"drop user if exists",
+		"drop role if exists",
+		"drop user 'acct_a'@'%',",
+		"drop role 'role_a',",
+		"drop role role_a@",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

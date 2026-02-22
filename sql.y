@@ -54,6 +54,24 @@ func isAtSign(tok []byte) bool {
   return len(tok) == 1 && tok[0] == '@'
 }
 
+func hasPrefixAtWithHost(tok []byte) bool {
+  return len(tok) > 1 && tok[0] == '@'
+}
+
+func hasSuffixAtWithUser(tok []byte) bool {
+  return len(tok) > 1 && tok[len(tok)-1] == '@'
+}
+
+func splitAccountIDToken(tok []byte) (*SQLVal, *SQLVal, bool) {
+  atPos := strings.IndexByte(string(tok), '@')
+  if atPos <= 0 || atPos >= len(tok)-1 {
+    return nil, nil, false
+  }
+  user := NewStrVal(tok[:atPos])
+  host := NewStrVal(tok[atPos+1:])
+  return user, host, true
+}
+
 func isUserVariableColumnName(col *ColName) bool {
   return col != nil && col.Qualifier.IsEmpty() && strings.HasPrefix(col.Name.String(), "@")
 }
@@ -2683,6 +2701,22 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, Table: viewName, Tables: viewNames, IfExists: exists}
   }
+| DROP ID exists_opt account_name_list
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    switch strings.ToLower(string($2)) {
+    case "user":
+      $$ = &DropUser{IfExists: exists, Users: $4}
+    case "role":
+      $$ = &DropRole{IfExists: exists, Roles: $4}
+    default:
+      yylex.Error("syntax error")
+      return 1
+    }
+  }
 | DROP DATABASE exists_opt ID
   {
     $$ = &DBDDL{Action: DropStr, DBName: string($4)}
@@ -3053,7 +3087,16 @@ account_name:
   }
 | ID
   {
-    $$ = &AccountName{User: NewStrVal($1)}
+    user, host, ok := splitAccountIDToken($1)
+    if ok {
+      $$ = &AccountName{User: user, Host: host}
+    } else {
+      if strings.ContainsRune(string($1), '@') {
+        yylex.Error("expecting @ in account name")
+        return 1
+      }
+      $$ = &AccountName{User: NewStrVal($1)}
+    }
   }
 | STRING ID STRING
   {
@@ -3062,6 +3105,22 @@ account_name:
       return 1
     }
     $$ = &AccountName{User: NewStrVal($1), Host: NewStrVal($3)}
+  }
+| STRING ID
+  {
+    if !hasPrefixAtWithHost($2) {
+      yylex.Error("expecting @ in account name")
+      return 1
+    }
+    $$ = &AccountName{User: NewStrVal($1), Host: NewStrVal($2[1:])}
+  }
+| ID STRING
+  {
+    if !hasSuffixAtWithUser($1) {
+      yylex.Error("expecting @ in account name")
+      return 1
+    }
+    $$ = &AccountName{User: NewStrVal($1[:len($1)-1]), Host: NewStrVal($2)}
   }
 
 other_statement:

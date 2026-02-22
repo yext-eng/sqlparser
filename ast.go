@@ -200,6 +200,8 @@ func (*Execute) iStatement()         {}
 func (*Begin) iStatement()           {}
 func (*Commit) iStatement()          {}
 func (*Rollback) iStatement()        {}
+func (*DropUser) iStatement()        {}
+func (*DropRole) iStatement()        {}
 func (*Grant) iStatement()           {}
 func (*Revoke) iStatement()          {}
 func (*OtherRead) iStatement()       {}
@@ -1912,6 +1914,50 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 
 func (node *Rollback) walkSubtree(visit Visit) error {
 	return nil
+}
+
+// DropUser represents a DROP USER statement.
+type DropUser struct {
+	IfExists bool
+	Users    AccountNames
+}
+
+// Format formats the node.
+func (node *DropUser) Format(buf *TrackedBuffer) {
+	buf.Myprintf("drop user")
+	if node.IfExists {
+		buf.Myprintf(" if exists")
+	}
+	buf.Myprintf(" %v", node.Users)
+}
+
+func (node *DropUser) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Users,
+	)
+}
+
+// DropRole represents a DROP ROLE statement.
+type DropRole struct {
+	IfExists bool
+	Roles    AccountNames
+}
+
+// Format formats the node.
+func (node *DropRole) Format(buf *TrackedBuffer) {
+	buf.Myprintf("drop role")
+	if node.IfExists {
+		buf.Myprintf(" if exists")
+	}
+	buf.Myprintf(" %v", node.Roles)
+}
+
+func (node *DropRole) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		node.Roles,
+	)
 }
 
 // Grant represents a GRANT statement.

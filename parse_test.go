@@ -71,6 +71,9 @@ var (
 	}, {
 		input: "select /* back-quote keyword */ `By` from t",
 	}, {
+		input:  "select auto_increment + 5000 from information_schema.tables",
+		output: "select `auto_increment` + 5000 from information_schema.`tables`",
+	}, {
 		input: "select /* back-quote num */ `2a` from t",
 	}, {
 		input: "select /* back-quote . */ `a.b` from t",

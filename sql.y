@@ -4627,7 +4627,6 @@ reserved_keyword:
 | AND
 | AS
 | ASC
-| AUTO_INCREMENT
 | BETWEEN
 | BINARY
 | BY
@@ -4738,6 +4737,7 @@ non_reserved_keyword:
 | AGAINST
 | AFTER
 | ALWAYS
+| AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | COALESCE
 | BEGIN

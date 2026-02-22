@@ -1056,14 +1056,26 @@ var (
 		input:  "drop view a",
 		output: "drop table a",
 	}, {
+		input:  "drop view v_one, v_two",
+		output: "drop table v_one, v_two",
+	}, {
 		input:  "drop table a",
 		output: "drop table a",
+	}, {
+		input:  "drop table t_one, t_two",
+		output: "drop table t_one, t_two",
 	}, {
 		input:  "drop table if exists a",
 		output: "drop table if exists a",
 	}, {
+		input:  "drop table if exists t_one, t_two",
+		output: "drop table if exists t_one, t_two",
+	}, {
 		input:  "drop view if exists a",
 		output: "drop table if exists a",
+	}, {
+		input:  "drop view if exists v_one, v_two",
+		output: "drop table if exists v_one, v_two",
 	}, {
 		input:  "drop index b on a",
 		output: "alter table a",
@@ -1622,8 +1634,14 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "drop table B",
 		output: "drop table B",
 	}, {
+		input:  "drop table B, C",
+		output: "drop table B, C",
+	}, {
 		input:  "drop table if exists B",
 		output: "drop table if exists B",
+	}, {
+		input:  "drop table if exists B, C",
+		output: "drop table if exists B, C",
 	}, {
 		input:  "drop index b on A",
 		output: "alter table A",
@@ -1670,8 +1688,14 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "drop view A",
 		output: "drop table a",
 	}, {
+		input:  "drop view A, C",
+		output: "drop table a, c",
+	}, {
 		input:  "drop view if exists A",
 		output: "drop table if exists a",
+	}, {
+		input:  "drop view if exists A, C",
+		output: "drop table if exists a, c",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",

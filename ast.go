@@ -940,6 +940,7 @@ type DDL struct {
 	Temporary           bool
 	IfNotExists         bool
 	Table               TableName
+	Tables              TableNames
 	NewName             TableName
 	IfExists            bool
 	TableSpec           *TableSpec
@@ -990,7 +991,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
+		if len(node.Tables) > 0 {
+			buf.Myprintf("%s table%s %v", node.Action, exists, node.Tables)
+		} else {
+			buf.Myprintf("%s table%s %v", node.Action, exists, node.Table)
+		}
 	case RenameStr:
 		buf.Myprintf("%s table %v to %v", node.Action, node.Table, node.NewName)
 	case AlterStr:
@@ -1021,6 +1026,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Table,
+		node.Tables,
 		node.NewName,
 		node.LikeTable,
 		node.OptSelect,

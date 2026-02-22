@@ -2650,26 +2650,38 @@ rename_statement:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name
+  DROP TABLE exists_opt table_name_list
   {
     var exists bool
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
+    var table TableName
+    if len($4) > 0 {
+      table = $4[0]
+    }
+    $$ = &DDL{Action: DropStr, Table: table, Tables: $4, IfExists: exists}
   }
 | DROP INDEX sql_id ON table_name drop_index_options_opt
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
   }
-| DROP VIEW exists_opt table_name
+| DROP VIEW exists_opt table_name_list
   {
     var exists bool
-        if $3 != 0 {
-          exists = true
-        }
-    $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
+    if $3 != 0 {
+      exists = true
+    }
+    viewNames := make(TableNames, 0, len($4))
+    for _, viewName := range $4 {
+      viewNames = append(viewNames, viewName.ToViewName())
+    }
+    var viewName TableName
+    if len(viewNames) > 0 {
+      viewName = viewNames[0]
+    }
+    $$ = &DDL{Action: DropStr, Table: viewName, Tables: viewNames, IfExists: exists}
   }
 | DROP DATABASE exists_opt ID
   {

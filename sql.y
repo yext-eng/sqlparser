@@ -519,6 +519,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
+%type <str> index_order_opt
 %type <limit> limit_opt
 %type <str> lock_opt lock_modifier_opt
 %type <columns> ins_column_list column_list
@@ -1777,9 +1778,22 @@ index_column_list:
   }
 
 index_column:
-  sql_id length_opt
+  sql_id length_opt index_order_opt
   {
-      $$ = &IndexColumn{Column: $1, Length: $2}
+      $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+  }
+
+index_order_opt:
+  {
+    $$ = ""
+  }
+| ASC
+  {
+    $$ = AscScr
+  }
+| DESC
+  {
+    $$ = DescScr
   }
 
 table_option_list:

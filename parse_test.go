@@ -2197,6 +2197,7 @@ func TestCreateTable(t *testing.T) {
 	validAlterTableOptionsSQL := []string{
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm=inplace, lock=none",
 		"alter table tbl_a add index idx_ab (col_a, col_b), algorithm inplace, lock none",
+		"alter table tbl_a add index idx_ab (col_a desc, col_b asc), algorithm=inplace, lock=none",
 		"alter table tbl_a add constraint uq_ab unique key idx_ab (col_a, col_b), lock=shared",
 		"alter table tbl_a drop index idx_ab, lock=shared",
 		"alter table tbl_a drop constraint chk_a, lock=shared",
@@ -2239,6 +2240,7 @@ func TestCreateTable(t *testing.T) {
 		"create index idx_a on tbl_a (col_a) lock=shared algorithm=instant",
 		"create index idx_a on tbl_a (col_a) algorithm inplace, lock none",
 		"create index idx_a on tbl_a (col_a) using btree algorithm=inplace",
+		"create index idx_a on tbl_a (col_a asc, col_b(8) desc) algorithm=inplace",
 	}
 	for _, sql := range validCreateIndexOptionsSQL {
 		tree, err := Parse(sql)
@@ -2501,6 +2503,10 @@ func TestCreateTable(t *testing.T) {
 		"create index idx_a on tbl_a (col_a) algorithm=online",
 		// Trailing comma after the final option is invalid.
 		"create index idx_a on tbl_a (col_a) algorithm=inplace, lock=none,",
+		// A key part cannot specify both ASC and DESC.
+		"create index idx_a on tbl_a (col_a asc desc)",
+		// A key part cannot specify both DESC and ASC.
+		"create index idx_a on tbl_a (col_a desc asc)",
 	}
 	for _, sql := range invalidCreateIndexOptionsSQL {
 		tree, err := Parse(sql)
@@ -3015,6 +3021,19 @@ func TestCreateTable(t *testing.T) {
 		output: "create table tbl_alias (\n" +
 			"\tcol_a double not null,\n" +
 			"\tcol_b float\n" +
+			")",
+	}, {
+		input: "create table tbl_idx_dir (\n" +
+			"	col_a bigint,\n" +
+			"	col_b bigint,\n" +
+			"	key idx_ab (col_a desc, col_b asc),\n" +
+			"	key idx_c (col_a(8) desc)\n" +
+			")",
+		output: "create table tbl_idx_dir (\n" +
+			"\tcol_a bigint,\n" +
+			"\tcol_b bigint,\n" +
+			"\tkey idx_ab (col_a desc, col_b asc),\n" +
+			"\tkey idx_c (col_a(8) desc)\n" +
 			")",
 	},
 	}

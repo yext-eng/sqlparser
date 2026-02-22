@@ -2099,6 +2099,16 @@ func TestCreateTable(t *testing.T) {
 			"	check (id > 0),\n" +
 			"	constraint id_lt_100 check (id < 100)\n" +
 			")",
+		// inline column check constraints
+		"create table t (\n" +
+			"	col_a int check (col_a > 0)\n" +
+			")",
+		"create table t (\n" +
+			"	col_a int constraint chk_col_a check (col_a > 0)\n" +
+			")",
+		"create table t (\n" +
+			"	col_flag bool not null default true check (col_flag)\n" +
+			")",
 		// foreign key constraints
 		"create table t (\n" +
 			"	id int,\n" +
@@ -2711,6 +2721,8 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_attr_bad10 add column col_a int generated always as (col_b + 1) not null null",
 		"alter table tbl_attr_bad11 add column col_a int generated always as (col_b + 1) key unique",
 		"alter table tbl_attr_bad12 add column col_a int generated always as (col_b + 1) comment 'a' comment 'b'",
+		"create table tbl_attr_bad13 (col_a int check)",
+		"create table tbl_attr_bad14 (col_a int constraint chk_col_a foreign key (col_a) references tbl_ref (col_a))",
 	}
 	for _, sql := range invalidColumnAttributeDupSQL {
 		tree, err := Parse(sql)

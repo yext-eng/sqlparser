@@ -84,6 +84,7 @@ type columnAttrSet struct {
   KeyOptSet        bool
   KeyOpt           ColumnKeyOption
   Comment          *SQLVal
+  Checks           []*ConstraintDefinition
   Reference        *ReferenceDefinition
 }
 
@@ -151,6 +152,7 @@ func mergeColumnAttrSet(yylex interface{}, dst *columnAttrSet, src *columnAttrSe
     }
     dst.Comment = src.Comment
   }
+  dst.Checks = append(dst.Checks, src.Checks...)
   if src.Reference != nil {
     if dst.Reference != nil {
       yylex.(*Tokenizer).Error("syntax error")
@@ -221,6 +223,7 @@ func applyColumnAttrSet(colType ColumnType, attrs *columnAttrSet) ColumnType {
   if attrs.Comment != nil {
     colType.Comment = attrs.Comment
   }
+  colType.Checks = append(colType.Checks, attrs.Checks...)
   if attrs.Reference != nil {
     colType.Reference = attrs.Reference
   }
@@ -567,6 +570,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <indexDefinition> index_definition
 %type <indexDefinition> alter_index_definition
 %type <indexDefinition> named_constraint_index_definition
+%type <constraintDefinition> check_constraint_definition
 %type <constraintDefinition> constraint_definition
 %type <constraintDefinition> foreign_key_definition
 %type <referenceDefinition> reference_definition
@@ -1315,6 +1319,10 @@ column_attr:
   {
     $$ = &columnAttrSet{Comment: $1}
   }
+| check_constraint_definition
+  {
+    $$ = &columnAttrSet{Checks: []*ConstraintDefinition{$1}}
+  }
 | reference_definition
   {
     $$ = &columnAttrSet{Reference: $1}
@@ -1528,7 +1536,7 @@ alter_index_definition:
     $$ = &IndexDefinition{Info: $1, Columns: $3}
   }
 
-constraint_definition:
+check_constraint_definition:
   CHECK openb expression closeb
   {
     $$ = &ConstraintDefinition{Expr: $3}
@@ -1537,6 +1545,8 @@ constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: $2, Expr: $5}
   }
+constraint_definition:
+  check_constraint_definition
 | foreign_key_definition
 | CONSTRAINT foreign_key_definition
   {

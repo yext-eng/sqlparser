@@ -1384,6 +1384,9 @@ type ColumnType struct {
 	// Key specification
 	KeyOpt ColumnKeyOption
 
+	// Inline CHECK constraints for column-level checks.
+	Checks []*ConstraintDefinition
+
 	// Inline foreign key reference definition for column-level REFERENCES.
 	Reference *ReferenceDefinition
 }
@@ -1458,6 +1461,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
+	}
+	for _, check := range ct.Checks {
+		buf.Myprintf(" %v", check)
 	}
 	if ct.Reference != nil {
 		buf.Myprintf(" %v", ct.Reference)
@@ -1590,7 +1596,15 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 	if ct == nil {
 		return nil
 	}
-	return Walk(visit, ct.Default, ct.OnUpdate, ct.GeneratedExpr, ct.Reference)
+	if err := Walk(visit, ct.Default, ct.OnUpdate, ct.GeneratedExpr); err != nil {
+		return err
+	}
+	for _, check := range ct.Checks {
+		if err := Walk(visit, check); err != nil {
+			return err
+		}
+	}
+	return Walk(visit, ct.Reference)
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

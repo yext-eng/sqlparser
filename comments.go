@@ -36,6 +36,16 @@ func isNonSpace(r rune) bool {
 	return !unicode.IsSpace(r)
 }
 
+func hasLineCommentPrefix(text string) bool {
+	if strings.HasPrefix(text, "#") {
+		return true
+	}
+	if strings.HasPrefix(text, "--") {
+		return len(text) == 2 || unicode.IsSpace(rune(text[2]))
+	}
+	return false
+}
+
 // leadingCommentEnd returns the first index after all leading comments, or
 // 0 if there are no leading comments.
 func leadingCommentEnd(text string) (end int) {
@@ -51,19 +61,35 @@ func leadingCommentEnd(text string) (end int) {
 		pos += nextVisibleOffset
 		remainingText := text[pos:]
 
-		// Found visible characters. Look for '/*' at the beginning
-		// and '*/' somewhere after that.
-		if len(remainingText) < 4 || remainingText[:2] != "/*" {
-			break
-		}
-		commentLength := 4 + strings.Index(remainingText[2:], "*/")
-		if commentLength < 4 {
-			// Missing end comment :/
-			break
+		// Found visible characters. Look for comment prefixes.
+		if strings.HasPrefix(remainingText, "/*") {
+			commentLength := 4 + strings.Index(remainingText[2:], "*/")
+			if commentLength < 4 {
+				// Missing end comment :/
+				break
+			}
+			hasComment = true
+			pos += commentLength
+			continue
 		}
 
-		hasComment = true
-		pos += commentLength
+		if hasLineCommentPrefix(remainingText) {
+			lineEnd := strings.IndexAny(remainingText, "\r\n")
+			hasComment = true
+			if lineEnd < 0 {
+				// Single-line comment runs to end of input.
+				pos = len(text)
+				continue
+			}
+			pos += lineEnd + 1
+			// Handle CRLF as a single line terminator.
+			if remainingText[lineEnd] == '\r' && lineEnd+1 < len(remainingText) && remainingText[lineEnd+1] == '\n' {
+				pos++
+			}
+			continue
+		}
+
+		break
 	}
 
 	if hasComment {
@@ -85,7 +111,7 @@ func trailingCommentStart(text string) (start int) {
 			break
 		}
 		reducedLen = nextReducedLen
-		if reducedLen < 4 || text[reducedLen-2:reducedLen] != "*/" {
+		if reducedLen < 2 || text[reducedLen-2:reducedLen] != "*/" {
 			// Try single-line trailing comments (MySQL supports both '-- ' and '#').
 			lineStart := reducedLen - 1
 			for lineStart >= 0 && text[lineStart] != '\n' && text[lineStart] != '\r' {
@@ -210,7 +236,7 @@ type CommentDirectives map[string]interface{}
 // ExtractCommentDirectives parses the comment list for any execution directives
 // of the form:
 //
-//     /*vt+ OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
+//	/*vt+ OPTION_ONE=1 OPTION_TWO OPTION_THREE=abcd */
 //
 // It returns the map of the directive values or nil if there aren't any.
 func ExtractCommentDirectives(comments Comments) CommentDirectives {

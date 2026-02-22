@@ -129,6 +129,51 @@ func TestSplitComments(t *testing.T) {
 		outSQL:              "",
 		outLeadingComments:  "",
 		outTrailingComments: "# only hash comment",
+	}, {
+		input:               "-- lead one\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "-- lead one\n",
+		outTrailingComments: "",
+	}, {
+		input:               "--\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "--\n",
+		outTrailingComments: "",
+	}, {
+		input:               "# lead one\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "# lead one\n",
+		outTrailingComments: "",
+	}, {
+		input:               "#\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "#\n",
+		outTrailingComments: "",
+	}, {
+		input:               "-- lead one\r\n# lead two\r\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "-- lead one\r\n# lead two\r\n",
+		outTrailingComments: "",
+	}, {
+		input:               "/**/\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "/**/\n",
+		outTrailingComments: "",
+	}, {
+		input:               "/* lead block */\n-- lead one\n# lead two\nselect 1",
+		outSQL:              "select 1",
+		outLeadingComments:  "/* lead block */\n-- lead one\n# lead two\n",
+		outTrailingComments: "",
+	}, {
+		input:               "/*/\nselect 1",
+		outSQL:              "/*/\nselect 1",
+		outLeadingComments:  "",
+		outTrailingComments: "",
+	}, {
+		input:               "--not_a_comment\nselect 1",
+		outSQL:              "--not_a_comment\nselect 1",
+		outLeadingComments:  "",
+		outTrailingComments: "",
 	}}
 	for _, testCase := range testCases {
 		gotSQL, gotComments := SplitMarginComments(testCase.input)

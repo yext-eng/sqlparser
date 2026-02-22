@@ -58,6 +58,24 @@ func isUserVariableColumnName(col *ColName) bool {
   return col != nil && col.Qualifier.IsEmpty() && strings.HasPrefix(col.Name.String(), "@")
 }
 
+func isStrictUserVariableColumnName(col *ColName) bool {
+  if !isUserVariableColumnName(col) {
+    return false
+  }
+  return !strings.HasPrefix(col.Name.String(), "@@")
+}
+
+func isPrepareSourceExpr(expr Expr) bool {
+  switch node := expr.(type) {
+  case *SQLVal:
+    return node != nil && node.Type == StrVal
+  case *ColName:
+    return isStrictUserVariableColumnName(node)
+  default:
+    return false
+  }
+}
+
 func rejectDeprecatedSetVar(yylex interface{}, name ColIdent) bool {
   lowered := name.Lowered()
   if lowered == "tx_isolation" || lowered == "tx_read_only" {
@@ -293,6 +311,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
   strs          []string
   selectExprs   SelectExprs
   selectIntoVars SelectIntoVars
+  executeUsingVars ExecuteUsingVars
   selectExpr    SelectExpr
   columns       Columns
   partitions    Partitions
@@ -414,6 +433,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %token <bytes> DISCARD IMPORT TABLESPACE COALESCE EXCHANGE REBUILD VALIDATION WITHOUT REMOVE PARTITIONING
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
+%token <bytes> PREPARE EXECUTE
 %token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
 %token <bytes> CASCADE RESTRICT ACTION NO
 
@@ -463,6 +483,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <ddl> create_table_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
+%type <statement> prepare_statement execute_statement
 %type <statement> grant_statement revoke_statement
 %type <privilege> privilege
 %type <privileges> privilege_list
@@ -478,6 +499,8 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <selectExpr> select_expression
 %type <selectIntoVars> select_into_opt select_into_var_list
 %type <colIdent> select_into_var
+%type <executeUsingVars> execute_using_opt execute_using_var_list
+%type <colIdent> execute_using_var
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -631,6 +654,8 @@ command:
 | analyze_statement
 | show_statement
 | use_statement
+| prepare_statement
+| execute_statement
 | begin_statement
 | commit_statement
 | rollback_statement
@@ -750,7 +775,7 @@ select_into_var_list:
 select_into_var:
   column_name
   {
-    if !isUserVariableColumnName($1) {
+    if !isStrictUserVariableColumnName($1) {
       yylex.Error("expecting user variable in SELECT INTO")
       return 1
     }
@@ -2855,6 +2880,51 @@ use_statement:
     $$ = &Use{DBName:TableIdent{v:""}}
   }
 
+prepare_statement:
+  PREPARE table_id FROM expression
+  {
+    if !isPrepareSourceExpr($4) {
+      yylex.Error("expecting user variable or string literal in PREPARE")
+      return 1
+    }
+    $$ = &Prepare{Name: $2, Source: $4}
+  }
+
+execute_statement:
+  EXECUTE table_id execute_using_opt
+  {
+    $$ = &Execute{Name: $2, UsingVars: $3}
+  }
+
+execute_using_opt:
+  {
+    $$ = nil
+  }
+| USING execute_using_var_list
+  {
+    $$ = $2
+  }
+
+execute_using_var_list:
+  execute_using_var
+  {
+    $$ = ExecuteUsingVars{$1}
+  }
+| execute_using_var_list ',' execute_using_var
+  {
+    $$ = append($1, $3)
+  }
+
+execute_using_var:
+  column_name
+  {
+    if !isStrictUserVariableColumnName($1) {
+      yylex.Error("expecting user variable in EXECUTE USING")
+      return 1
+    }
+    $$ = $1.Name
+  }
+
 begin_statement:
   BEGIN
   {
@@ -4687,6 +4757,7 @@ reserved_keyword:
 | ELSE
 | END
 | ESCAPE
+| EXECUTE
 | EXISTS
 | EXPLAIN
 | FALSE
@@ -4727,6 +4798,7 @@ reserved_keyword:
 | ORDER
 | OVER
 | OUTER
+| PREPARE
 | REGEXP
 | REFERENCES
 | RENAME

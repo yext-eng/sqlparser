@@ -195,6 +195,8 @@ func (*DBDDL) iStatement()           {}
 func (*DDL) iStatement()             {}
 func (*Show) iStatement()            {}
 func (*Use) iStatement()             {}
+func (*Prepare) iStatement()         {}
+func (*Execute) iStatement()         {}
 func (*Begin) iStatement()           {}
 func (*Commit) iStatement()          {}
 func (*Rollback) iStatement()        {}
@@ -1808,6 +1810,66 @@ func (node *Use) Format(buf *TrackedBuffer) {
 
 func (node *Use) walkSubtree(visit Visit) error {
 	return Walk(visit, node.DBName)
+}
+
+// Prepare represents a PREPARE statement.
+type Prepare struct {
+	Name   TableIdent
+	Source Expr
+}
+
+// Format formats the node.
+func (node *Prepare) Format(buf *TrackedBuffer) {
+	buf.Myprintf("prepare %v from %v", node.Name, node.Source)
+}
+
+func (node *Prepare) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Name, node.Source)
+}
+
+// ExecuteUsingVars represents EXECUTE ... USING variable list.
+type ExecuteUsingVars []ColIdent
+
+// Format formats the node.
+func (node ExecuteUsingVars) Format(buf *TrackedBuffer) {
+	if len(node) == 0 {
+		return
+	}
+	prefix := " using "
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node ExecuteUsingVars) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Execute represents an EXECUTE statement.
+type Execute struct {
+	Name      TableIdent
+	UsingVars ExecuteUsingVars
+}
+
+// Format formats the node.
+func (node *Execute) Format(buf *TrackedBuffer) {
+	buf.Myprintf("execute %v%v", node.Name, node.UsingVars)
+}
+
+func (node *Execute) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Name, node.UsingVars)
 }
 
 // Begin represents a Begin statement.

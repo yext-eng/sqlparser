@@ -823,6 +823,16 @@ var (
 	}, {
 		input: "set sql_safe_updates = 1",
 	}, {
+		input: "prepare stmt_a from @sql_text",
+	}, {
+		input: "prepare stmt_a from 'select 1'",
+	}, {
+		input: "execute stmt_a",
+	}, {
+		input: "execute stmt_a using @v1",
+	}, {
+		input: "execute stmt_a using @v1, @v2",
+	}, {
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a add unique key foo (column1)",
 	}, {
@@ -1464,6 +1474,28 @@ func TestSelectIntoInvalid(t *testing.T) {
 	invalidSQL := []string{
 		"select col_a into col_b from tbl_a",
 		"select col_a into @v1, col_b from tbl_a",
+		"select col_a into @v1 from tbl_a into @v2",
+		"select col_a into @v1, @@session.var_a from tbl_a",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestPrepareExecuteInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"prepare stmt_a from col_a",
+		"prepare stmt_a from ?",
+		"prepare stmt_a from 123",
+		"prepare stmt_a from @v1 + 1",
+		"execute stmt_a using",
+		"execute stmt_a using col_a",
+		"execute stmt_a using @v1, col_a",
+		"execute stmt_a using @v1 + 1",
+		"execute stmt_a using @@session.var_a",
+		"execute stmt_a using @v1,",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

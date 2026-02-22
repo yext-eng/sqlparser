@@ -64,6 +64,8 @@ func TestPreview(t *testing.T) {
 		{"describe", StmtOther},
 		{"desc", StmtOther},
 		{"explain", StmtOther},
+		{"lock", StmtOther},
+		{"unlock", StmtOther},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
 		{"truncate", StmtDDL},

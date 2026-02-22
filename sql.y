@@ -386,6 +386,8 @@ func normalizeDefaultExpr(expr Expr) Expr {
   privilegeObject *PrivilegeObject
   accountName   *AccountName
   accountNames  AccountNames
+  tableLock     *TableLock
+  tableLocks    TableLocks
   with          *With
   commonTableExpr *CommonTableExpr
   commonTableExprs CommonTableExprs
@@ -451,6 +453,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %token <bytes> DISCARD IMPORT TABLESPACE COALESCE EXCHANGE REBUILD VALIDATION WITHOUT REMOVE PARTITIONING
 %token <bytes> STATUS VARIABLES
 %token <bytes> GRANT REVOKE OPTION
+%token <bytes> UNLOCK
 %token <bytes> PREPARE EXECUTE
 %token <bytes> JSON_TABLE COLUMNS PATH ORDINALITY NESTED
 %token <bytes> CASCADE RESTRICT ACTION NO
@@ -476,6 +479,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <bytes> LOCAL LOW_PRIORITY
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -503,11 +507,14 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <statement> begin_statement commit_statement rollback_statement
 %type <statement> prepare_statement execute_statement
 %type <statement> grant_statement revoke_statement
+%type <statement> lock_statement unlock_statement
 %type <privilege> privilege
 %type <privileges> privilege_list
 %type <privilegeObject> privilege_object
 %type <accountName> account_name
 %type <accountNames> account_name_list
+%type <tableLock> lock_table
+%type <tableLocks> lock_table_list
 %type <bytes2> comment_opt comment_list
 %type <str> union_op union_or_except_op intersect_op except_op insert_or_replace
 %type <str> recursive_opt
@@ -591,10 +598,12 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <commonTableExprs> common_table_expr_list
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
+%type <tableIdent> lock_table_alias
 %type <empty> as_opt
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
+%type <str> lock_table_or_tables lock_table_type lock_read_local_opt lock_write_low_priority_opt
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -679,6 +688,8 @@ command:
 | rollback_statement
 | grant_statement
 | revoke_statement
+| lock_statement
+| unlock_statement
 | other_statement
 
 select_statement:
@@ -2993,6 +3004,98 @@ rollback_statement:
     $$ = &Rollback{}
   }
 
+lock_statement:
+  LOCK lock_table_or_tables lock_table_list
+  {
+    $$ = &LockTables{Tables: $3}
+  }
+
+unlock_statement:
+  UNLOCK lock_table_or_tables
+  {
+    $$ = &UnlockTables{}
+  }
+
+lock_table_or_tables:
+  TABLE
+  {
+    $$ = string($1)
+  }
+| TABLES
+  {
+    $$ = string($1)
+  }
+
+lock_table_list:
+  lock_table
+  {
+    $$ = TableLocks{$1}
+  }
+| lock_table_list ',' lock_table
+  {
+    $$ = append($1, $3)
+  }
+
+lock_table:
+  table_name lock_table_type
+  {
+    $$ = &TableLock{Table: $1, Lock: $2}
+  }
+| table_name AS lock_table_alias lock_table_type
+  {
+    $$ = &TableLock{Table: $1, Alias: $3, Lock: $4}
+  }
+| table_name lock_table_alias lock_table_type
+  {
+    $$ = &TableLock{Table: $1, Alias: $2, Lock: $3}
+  }
+
+lock_table_alias:
+  ID
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| STRING
+  {
+    $$ = NewTableIdent(string($1))
+  }
+
+lock_table_type:
+  READ lock_read_local_opt
+  {
+    if $2 != "" {
+      $$ = "read local"
+    } else {
+      $$ = "read"
+    }
+  }
+| lock_write_low_priority_opt WRITE
+  {
+    if $1 != "" {
+      $$ = "low_priority write"
+    } else {
+      $$ = "write"
+    }
+  }
+
+lock_read_local_opt:
+  {
+    $$ = ""
+  }
+| LOCAL
+  {
+    $$ = string($1)
+  }
+
+lock_write_low_priority_opt:
+  {
+    $$ = ""
+  }
+| LOW_PRIORITY
+  {
+    $$ = string($1)
+  }
+
 grant_statement:
   GRANT privilege_list ON privilege_object TO account_name_list
   {
@@ -4890,6 +4993,7 @@ reserved_keyword:
 | TRUE
 | UNION
 | UNIQUE
+| UNLOCK
 | UPDATE
 | USE
 | USING
@@ -4981,9 +5085,11 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINESTRING
+| LOCAL
 | LONGBLOB
 | LOCKED
 | LONGTEXT
+| LOW_PRIORITY
 | MASTER
 | MAX_ROWS
 | MEDIUMBLOB

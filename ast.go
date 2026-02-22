@@ -200,6 +200,8 @@ func (*Execute) iStatement()         {}
 func (*Begin) iStatement()           {}
 func (*Commit) iStatement()          {}
 func (*Rollback) iStatement()        {}
+func (*LockTables) iStatement()      {}
+func (*UnlockTables) iStatement()    {}
 func (*DropUser) iStatement()        {}
 func (*DropRole) iStatement()        {}
 func (*Grant) iStatement()           {}
@@ -1913,6 +1915,79 @@ func (node *Rollback) Format(buf *TrackedBuffer) {
 }
 
 func (node *Rollback) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// LockTables represents a LOCK TABLE[S] statement.
+type LockTables struct {
+	Tables TableLocks
+}
+
+// Format formats the node.
+func (node *LockTables) Format(buf *TrackedBuffer) {
+	buf.Myprintf("lock tables %v", node.Tables)
+}
+
+func (node *LockTables) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Tables)
+}
+
+// TableLocks is a list of table locks in a LOCK TABLES statement.
+type TableLocks []*TableLock
+
+// Format formats the node.
+func (node TableLocks) Format(buf *TrackedBuffer) {
+	prefix := ""
+	for _, lock := range node {
+		buf.Myprintf("%s%v", prefix, lock)
+		prefix = ", "
+	}
+}
+
+func (node TableLocks) walkSubtree(visit Visit) error {
+	for _, lock := range node {
+		if err := Walk(visit, lock); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TableLock represents one table lock target and lock mode.
+type TableLock struct {
+	Table TableName
+	Alias TableIdent
+	Lock  string
+}
+
+// Format formats the node.
+func (node *TableLock) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v", node.Table)
+	if !node.Alias.IsEmpty() {
+		buf.Myprintf(" as %v", node.Alias)
+	}
+	buf.Myprintf(" %s", node.Lock)
+}
+
+func (node *TableLock) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Table, node.Alias)
+}
+
+// UnlockTables represents an UNLOCK TABLE[S] statement.
+type UnlockTables struct{}
+
+// Format formats the node.
+func (node *UnlockTables) Format(buf *TrackedBuffer) {
+	buf.WriteString("unlock tables")
+}
+
+func (node *UnlockTables) walkSubtree(visit Visit) error {
 	return nil
 }
 

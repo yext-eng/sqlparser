@@ -1281,6 +1281,27 @@ var (
 		input:  "optimize table foo",
 		output: "otheradmin",
 	}, {
+		input:  "lock table tbl_a read",
+		output: "lock tables tbl_a read",
+	}, {
+		input:  "lock tables tbl_a read local",
+		output: "lock tables tbl_a read local",
+	}, {
+		input:  "lock tables tbl_a t_a write",
+		output: "lock tables tbl_a as t_a write",
+	}, {
+		input:  "lock tables tbl_a as `By` read",
+		output: "lock tables tbl_a as `By` read",
+	}, {
+		input:  "lock tables db_a.tbl_b as t_b low_priority write, tbl_c read",
+		output: "lock tables db_a.tbl_b as t_b low_priority write, tbl_c read",
+	}, {
+		input:  "unlock table",
+		output: "unlock tables",
+	}, {
+		input:  "unlock tables",
+		output: "unlock tables",
+	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
 	}, {
 		input: "select /* EQ false */ 1 from t where a = false",
@@ -1491,6 +1512,24 @@ func TestSelectLockInvalid(t *testing.T) {
 		"select 1 from t for share skip locked nowait",
 		"select 1 from t for share lock in share mode",
 		"select 1 from t lock in share mode nowait",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestTableLockInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"lock table",
+		"lock tables",
+		"lock tables tbl_a",
+		"lock tables tbl_a local",
+		"lock tables tbl_a write low_priority",
+		"lock tables tbl_a as read read",
+		"unlock",
+		"unlock tables tbl_a",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

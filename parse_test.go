@@ -872,6 +872,12 @@ var (
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 	}, {
+		input:  "alter table tbl_hash_a partition by hash (col_a) partitions 8",
+		output: "alter table tbl_hash_a partition by hash (col_a) partitions 8",
+	}, {
+		input:  "alter table tbl_hash_b partition by linear hash (col_b) partitions 4",
+		output: "alter table tbl_hash_b partition by linear hash (col_b) partitions 4",
+	}, {
 		input:  "alter table tbl_part add partition (partition p2 values less than (100))",
 		output: "alter table tbl_part add partition (partition p2 values less than (100))",
 	}, {
@@ -2831,6 +2837,12 @@ func TestCreateTable(t *testing.T) {
 		"create table t (id int) partition by range (id) (partition p0 values less than (10) engine =)",
 		// STORAGE ENGINE option requires the ENGINE keyword.
 		"create table t (id int) partition by range (id) (partition p0 values less than (10) storage = InnoDB)",
+		// HASH expression must be parenthesized.
+		"create table t (id int) partition by hash id partitions 8",
+		// PARTITIONS requires an integer value.
+		"create table t (id int) partition by hash (id) partitions",
+		// PARTITIONS keyword must not be misspelled.
+		"create table t (id int) partition by hash (id) partition 8",
 	}
 	for _, sql := range invalidCreateTablePartitionSQL {
 		tree, err := Parse(sql)
@@ -3135,6 +3147,24 @@ func TestCreateTable(t *testing.T) {
 			"\tid bigint unsigned not null auto_increment,\n" +
 			"\tprimary key (id)\n" +
 			") partition by range (id) (partition p0 values less than (100) engine InnoDB, partition p1 values less than (maxvalue) engine InnoDB)",
+	}, {
+		input: "create table tbl_hash_main (\n" +
+			"	col_a bigint unsigned not null,\n" +
+			"	primary key (col_a)\n" +
+			") partition by hash (col_a) partitions 10",
+		output: "create table tbl_hash_main (\n" +
+			"\tcol_a bigint unsigned not null,\n" +
+			"\tprimary key (col_a)\n" +
+			") partition by hash (col_a) partitions 10",
+	}, {
+		input: "create table tbl_hash_linear (\n" +
+			"	col_b bigint unsigned not null,\n" +
+			"	primary key (col_b)\n" +
+			") partition by linear hash (col_b) partitions 6",
+		output: "create table tbl_hash_linear (\n" +
+			"\tcol_b bigint unsigned not null,\n" +
+			"\tprimary key (col_b)\n" +
+			") partition by linear hash (col_b) partitions 6",
 	}, {
 		input: "create table t_part (\n" +
 			"	c_id bigint unsigned not null,\n" +

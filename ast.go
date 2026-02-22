@@ -1046,6 +1046,7 @@ func (node *DDL) walkSubtree(visit Visit) error {
 const (
 	ReorganizeStr                 = "reorganize partition"
 	PartitionByRangeStr           = "partition by range"
+	PartitionByHashStr            = "partition by hash"
 	AddPartitionStr               = "add partition"
 	DropPartitionStr              = "drop partition"
 	DiscardPartitionTablespaceStr = "discard partition"
@@ -1073,6 +1074,7 @@ type PartitionSpec struct {
 	Table       TableName
 	Validation  string
 	Expr        Expr
+	IsLinear    bool
 	IsColumns   bool
 	ColumnList  Columns
 	Definitions []*PartitionDefinition
@@ -1127,6 +1129,16 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 		} else {
 			buf.Myprintf("%s (%v) (", node.Action, node.Expr)
 		}
+	case PartitionByHashStr:
+		if node.IsLinear {
+			buf.Myprintf("partition by linear hash (%v)", node.Expr)
+		} else {
+			buf.Myprintf("%s (%v)", node.Action, node.Expr)
+		}
+		if node.Number != "" {
+			buf.Myprintf(" partitions %s", node.Number)
+		}
+		return
 	default:
 		panic("unimplemented")
 	}

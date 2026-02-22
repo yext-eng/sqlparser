@@ -649,7 +649,8 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <strs> reference_option_list reference_option_list_opt
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
-%type <partSpec> partition_operation partition_opt
+%type <partSpec> partition_operation partition_opt partition_by_clause
+%type <str> partition_count_opt
 
 %start any_command
 
@@ -2523,26 +2524,61 @@ partition_operation:
   {
     $$ = &PartitionSpec{Action: RemovePartitioningStr}
   }
-| PARTITION BY RANGE openb value_expression closeb openb partition_definitions closeb
+| partition_by_clause
   {
-    $$ = &PartitionSpec{Action: PartitionByRangeStr, Expr: $5, Definitions: $8}
-  }
-| PARTITION BY RANGE COLUMNS openb column_list closeb openb partition_definitions closeb
-  {
-    $$ = &PartitionSpec{Action: PartitionByRangeStr, IsColumns: true, ColumnList: $6, Definitions: $9}
+    $$ = $1
   }
 
 partition_opt:
   {
     $$ = nil
   }
-| PARTITION BY RANGE openb value_expression closeb openb partition_definitions closeb
+| partition_by_clause
+  {
+    $$ = $1
+  }
+
+partition_by_clause:
+  PARTITION BY RANGE openb value_expression closeb openb partition_definitions closeb
   {
     $$ = &PartitionSpec{Action: PartitionByRangeStr, Expr: $5, Definitions: $8}
   }
 | PARTITION BY RANGE COLUMNS openb column_list closeb openb partition_definitions closeb
   {
     $$ = &PartitionSpec{Action: PartitionByRangeStr, IsColumns: true, ColumnList: $6, Definitions: $9}
+  }
+| PARTITION BY sql_id openb value_expression closeb partition_count_opt
+  {
+    if !$3.EqualString("hash") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionSpec{Action: PartitionByHashStr, Expr: $5, Number: $7}
+  }
+| PARTITION BY sql_id sql_id openb value_expression closeb partition_count_opt
+  {
+    if !$3.EqualString("linear") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    if !$4.EqualString("hash") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &PartitionSpec{Action: PartitionByHashStr, Expr: $6, IsLinear: true, Number: $8}
+  }
+
+partition_count_opt:
+  {
+    $$ = ""
+  }
+| sql_id INTEGRAL
+  {
+    if !$1.EqualString("partitions") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = string($2)
   }
 
 partition_definitions:

@@ -292,6 +292,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
   str           string
   strs          []string
   selectExprs   SelectExprs
+  selectIntoVars SelectIntoVars
   selectExpr    SelectExpr
   columns       Columns
   partitions    Partitions
@@ -475,6 +476,8 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
+%type <selectIntoVars> select_into_opt select_into_var_list
+%type <colIdent> select_into_var
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -720,9 +723,38 @@ common_table_expr_columns_opt:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt window_clause_opt
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list select_into_opt from_opt where_expression_opt group_by_opt having_opt window_clause_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), Windows: $11}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, Into: $7, From: $8, Where: NewWhere(WhereStr, $9), GroupBy: GroupBy($10), Having: NewWhere(HavingStr, $11), Windows: $12}
+  }
+
+select_into_opt:
+  {
+    $$ = nil
+  }
+| INTO select_into_var_list
+  {
+    $$ = $2
+  }
+
+select_into_var_list:
+  select_into_var
+  {
+    $$ = SelectIntoVars{$1}
+  }
+| select_into_var_list ',' select_into_var
+  {
+    $$ = append($1, $3)
+  }
+
+select_into_var:
+  column_name
+  {
+    if !isUserVariableColumnName($1) {
+      yylex.Error("expecting user variable in SELECT INTO")
+      return 1
+    }
+    $$ = $1.Name
   }
 
 union_lhs:

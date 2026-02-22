@@ -302,6 +302,7 @@ type Select struct {
 	Distinct    string
 	Hints       string
 	SelectExprs SelectExprs
+	Into        SelectIntoVars
 	From        TableExprs
 	Where       *Where
 	GroupBy     GroupBy
@@ -348,8 +349,9 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	if node.With != nil {
 		buf.Myprintf("%v ", node.With)
 	}
-	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%v%s",
+	buf.Myprintf("select %v%s%s%s%v%v from %v%v%v%v%v%v%v%s",
 		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
+		node.Into,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.Windows, node.OrderBy,
 		node.Limit, node.Lock)
@@ -364,6 +366,7 @@ func (node *Select) walkSubtree(visit Visit) error {
 		node.With,
 		node.Comments,
 		node.SelectExprs,
+		node.Into,
 		node.From,
 		node.Where,
 		node.GroupBy,
@@ -2064,6 +2067,30 @@ func (node SelectExprs) Format(buf *TrackedBuffer) {
 }
 
 func (node SelectExprs) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SelectIntoVars represents a SELECT ... INTO user variable target list.
+type SelectIntoVars []ColIdent
+
+// Format formats the node.
+func (node SelectIntoVars) Format(buf *TrackedBuffer) {
+	if len(node) == 0 {
+		return
+	}
+	prefix := " into "
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node SelectIntoVars) walkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
 			return err

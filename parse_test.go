@@ -91,6 +91,13 @@ var (
 		input:  "select (@uv:=@uv+1) from t",
 		output: "select (@uv := @uv + 1) from t",
 	}, {
+		input: "select col_a into @v1 from tbl_a",
+	}, {
+		input: "select col_a, col_b into @v1, @v2 from tbl_a",
+	}, {
+		input:  "select 1 into @v1",
+		output: "select 1 into @v1 from dual",
+	}, {
 		input: "select /* \\0 */ '\\0' from a",
 	}, {
 		input:  "select 1 /* drop this comment */ from t",
@@ -1445,6 +1452,18 @@ func TestSelectLockInvalid(t *testing.T) {
 		"select 1 from t for share skip locked nowait",
 		"select 1 from t for share lock in share mode",
 		"select 1 from t lock in share mode nowait",
+	}
+	for _, sql := range invalidSQL {
+		if _, err := Parse(sql); err == nil {
+			t.Errorf("Parse(%q) err: nil, want non-nil", sql)
+		}
+	}
+}
+
+func TestSelectIntoInvalid(t *testing.T) {
+	invalidSQL := []string{
+		"select col_a into col_b from tbl_a",
+		"select col_a into @v1, col_b from tbl_a",
 	}
 	for _, sql := range invalidSQL {
 		if _, err := Parse(sql); err == nil {

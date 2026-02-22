@@ -1019,6 +1019,10 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName(), OptSelect: $7}
   }
+| CREATE TRIGGER table_name ddl_force_eof
+  {
+    $$ = &TriggerDDL{Action: CreateStr, Name: $3}
+  }
 | CREATE DATABASE not_exists_opt ID table_option_list
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
@@ -2740,6 +2744,14 @@ drop_statement:
       viewName = viewNames[0]
     }
     $$ = &DDL{Action: DropStr, Table: viewName, Tables: viewNames, IfExists: exists}
+  }
+| DROP TRIGGER exists_opt table_name
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &TriggerDDL{Action: DropStr, Name: $4, IfExists: exists}
   }
 | DROP ID exists_opt account_name_list
   {

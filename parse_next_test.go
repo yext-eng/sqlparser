@@ -123,6 +123,10 @@ func TestParseNextEdgeCases(t *testing.T) {
 		input: "set character set utf8; select 1 from a",
 		want:  []string{"set charset 'utf8'", "select 1 from a"},
 	}, {
+		name:  "Handle trigger DDL statements",
+		input: "drop trigger if exists trg_one; create trigger trg_two after insert on tbl_one for each row set @v = 1; select 1 from a",
+		want:  []string{"drop trigger if exists trg_one", "create trigger trg_two", "select 1 from a"},
+	}, {
 		name:  "Semicolin inside a string",
 		input: "set character set ';'; select 1 from a",
 		want:  []string{"set charset ';'", "select 1 from a"},

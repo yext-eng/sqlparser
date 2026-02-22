@@ -193,6 +193,7 @@ func (*Delete) iStatement()          {}
 func (*Set) iStatement()             {}
 func (*DBDDL) iStatement()           {}
 func (*DDL) iStatement()             {}
+func (*TriggerDDL) iStatement()      {}
 func (*Show) iStatement()            {}
 func (*Use) iStatement()             {}
 func (*Prepare) iStatement()         {}
@@ -1039,6 +1040,40 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		node.AlterConstraint,
 		node.AlterDropForeignKey,
 		node.AlterIndex,
+	)
+}
+
+// TriggerDDL represents a CREATE or DROP trigger statement.
+type TriggerDDL struct {
+	Action   string
+	Name     TableName
+	IfExists bool
+}
+
+// Format formats the node.
+func (node *TriggerDDL) Format(buf *TrackedBuffer) {
+	switch node.Action {
+	case CreateStr:
+		buf.Myprintf("%s trigger %v", node.Action, node.Name)
+	case DropStr:
+		exists := ""
+		if node.IfExists {
+			exists = " if exists"
+		}
+		buf.Myprintf("%s trigger%s %v", node.Action, exists, node.Name)
+	default:
+		buf.Myprintf("%s trigger %v", node.Action, node.Name)
+	}
+}
+
+// walkSubtree walks the nodes of the subtree.
+func (node *TriggerDDL) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
 	)
 }
 

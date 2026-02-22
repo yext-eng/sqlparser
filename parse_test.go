@@ -1056,6 +1056,12 @@ var (
 		input:  "create or replace view a as select 1",
 		output: "create table a as select 1 from dual",
 	}, {
+		input:  "create trigger trg_one after insert on tbl_one for each row set @v = 1",
+		output: "create trigger trg_one",
+	}, {
+		input:  "create trigger trg_two after delete on tbl_one for each row replace into tbl_two (c1) select old.c1",
+		output: "create trigger trg_two",
+	}, {
 		input:  "alter view a as select 1",
 		output: "alter table a as select 1 from dual",
 	}, {
@@ -1082,6 +1088,12 @@ var (
 	}, {
 		input:  "drop view if exists v_one, v_two",
 		output: "drop table if exists v_one, v_two",
+	}, {
+		input:  "drop trigger trg_one",
+		output: "drop trigger trg_one",
+	}, {
+		input:  "drop trigger if exists trg_two",
+		output: "drop trigger if exists trg_two",
 	}, {
 		input:  "drop index b on a",
 		output: "alter table a",
@@ -3395,6 +3407,12 @@ var (
 		input:        "select 'aa\\",
 		output:       "syntax error at position 12 near 'aa'",
 		excludeMulti: true,
+	}, {
+		input:  "drop trigger if exists",
+		output: "syntax error at position 23",
+	}, {
+		input:  "create trigger",
+		output: "syntax error at position 15",
 	}, {
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",

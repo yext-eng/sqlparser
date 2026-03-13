@@ -688,6 +688,14 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
+		input:  "insert into t1(c1, c2, c3) values row(1, 2, 3), row(4, 5, 6), row(7, 8, 9)",
+		output: "insert into t1(c1, c2, c3) values (1, 2, 3), (4, 5, 6), (7, 8, 9)",
+	}, {
+		input:  "insert into t1(c1, c2) values (1, 2), row(3, 4)",
+		output: "insert into t1(c1, c2) values (1, 2), (3, 4)",
+	}, {
+		input: "insert into t1 values ()",
+	}, {
 		input: "values row(1)",
 	}, {
 		input:  "values (1), (2, 3)",
@@ -2447,6 +2455,7 @@ func TestCreateTable(t *testing.T) {
 		"alter table tbl_ren2 add column col_c int null, rename column col_a to col_b",
 		"alter table tbl_attr_a add column col_a int default 0 not null",
 		"alter table tbl_attr_b modify column col_b int default 0 not null",
+		"alter table tbl_attr_json modify column col_json json",
 		"alter table tbl_attr_c change column col_old col_new int default 0 not null",
 		"alter table tbl_vis_a add column col_a int invisible",
 		"alter table tbl_vis_b modify column col_b int visible not null default 0",

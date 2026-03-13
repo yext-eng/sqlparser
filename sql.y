@@ -549,9 +549,9 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
-%type <values> tuple_list
+%type <values> insert_row_list
 %type <values> values_row_list
-%type <valTuple> row_tuple tuple_or_empty
+%type <valTuple> insert_row row_tuple
 %type <valTuple> values_row
 %type <expr> tuple_expression
 %type <subquery> subquery
@@ -4678,7 +4678,7 @@ lock_modifier_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES tuple_list
+  VALUES insert_row_list
   {
     $$ = &Insert{Rows: $2}
   }
@@ -4691,7 +4691,7 @@ insert_data:
     // Drop the redundant parenthesis.
     $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb VALUES tuple_list
+| openb ins_column_list closeb VALUES insert_row_list
   {
     $$ = &Insert{Columns: $2, Rows: $5}
   }
@@ -4732,14 +4732,24 @@ on_dup_opt:
     $$ = $5
   }
 
-tuple_list:
-  tuple_or_empty
+insert_row_list:
+  insert_row
   {
     $$ = Values{$1}
   }
-| tuple_list ',' tuple_or_empty
+| insert_row_list ',' insert_row
   {
     $$ = append($1, $3)
+  }
+
+insert_row:
+  values_row
+  {
+    $$ = $1
+  }
+| openb closeb
+  {
+    $$ = ValTuple{}
   }
 
 values_row_list:
@@ -4761,17 +4771,6 @@ values_row:
   {
     $$ = $1
   }
-
-tuple_or_empty:
-  row_tuple
-  {
-    $$ = $1
-  }
-| openb closeb
-  {
-    $$ = ValTuple{}
-  }
-
 row_tuple:
   openb expression_list closeb
   {

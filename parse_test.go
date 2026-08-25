@@ -1386,6 +1386,20 @@ var (
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
 	}, {
+		input:  "update tbl_x set col_y = _utf8mb4'alpha'",
+		output: "update tbl_x set col_y = _utf8mb4 'alpha'",
+	}, {
+		input:  "update tbl_x set col_y = _utf8mb4 'alpha'",
+		output: "update tbl_x set col_y = _utf8mb4 'alpha'",
+	}, {
+		input:  "select _latin1'beta' from tbl_x",
+		output: "select _latin1 'beta' from tbl_x",
+	}, {
+		input:  "select _utf8'gamma' from tbl_x",
+		output: "select _utf8 'gamma' from tbl_x",
+	}, {
+		input: "select _utf8mb4 from tbl_x",
+	}, {
 		input: "select match(a) against ('foo') from t",
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
@@ -3390,6 +3404,15 @@ var (
 	}, {
 		input:  "select 1 from t where binary",
 		output: "syntax error at position 29",
+	}, {
+		input:  "update tbl_x set col_y = _utf8mb4 123",
+		output: "syntax error at position 38 near '123'",
+	}, {
+		input:  "update tbl_x set col_y = _utf8mb4 ident_x",
+		output: "syntax error at position 42 near 'ident_x'",
+	}, {
+		input:  "update tbl_x set col_y = _ 'text'",
+		output: "syntax error at position 34 near 'text'",
 	}, {
 		input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
 		output: "syntax error at position 57 near 'with'",

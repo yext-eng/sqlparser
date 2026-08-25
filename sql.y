@@ -413,7 +413,7 @@ func normalizeDefaultExpr(expr Expr) Expr {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL UNDERSCORE_CHARSET
 %token <bytes> NULL TRUE FALSE OF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -3953,6 +3953,14 @@ value_expression:
   {
     $$ = $1
   }
+| UNDERSCORE_CHARSET STRING %prec UNARY
+  {
+    $$ = &IntroducerExpr{CharacterSet: string($1), Expr: NewStrVal($2)}
+  }
+| UNDERSCORE_BINARY STRING %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: UBinaryStr, Expr: NewStrVal($2)}
+  }
 | boolean_value
   {
     $$ = $1
@@ -4036,10 +4044,6 @@ value_expression:
 | BINARY value_expression %prec UNARY
   {
     $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2}
-  }
-| UNDERSCORE_BINARY value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {

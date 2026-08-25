@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/yext/sqlparser/dependency/querypb"
-	"github.com/yext/sqlparser/dependency/sqltypes"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 // ParsedQuery represents a parsed query where

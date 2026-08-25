@@ -20,9 +20,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/yext/sqlparser/dependency/sqltypes"
-
-	"github.com/yext/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 // Normalize changes the statement to use bind values, and

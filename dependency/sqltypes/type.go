@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"fmt"
 
-	"github.com/yext/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
 )
 
 // This file provides wrappers and support

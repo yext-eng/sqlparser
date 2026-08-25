@@ -24,8 +24,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/yext/sqlparser/dependency/querypb"
-	"github.com/yext/sqlparser/dependency/sqltypes"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 // Instructions for creating new types: If a type

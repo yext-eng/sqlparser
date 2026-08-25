@@ -186,6 +186,47 @@ func TestScanFloatAliases(t *testing.T) {
 	}
 }
 
+func TestScanCharsetIntroducer(t *testing.T) {
+	testcases := []struct {
+		in          string
+		wantIntroID int
+		wantIntro   string
+		wantStrID   int
+		wantStr     string
+	}{{
+		in:          "_utf8mb4'hello'",
+		wantIntroID: UNDERSCORE_CHARSET,
+		wantIntro:   "_utf8mb4",
+		wantStrID:   STRING,
+		wantStr:     "hello",
+	}, {
+		in:          "_utf8mb4 'hello'",
+		wantIntroID: UNDERSCORE_CHARSET,
+		wantIntro:   "_utf8mb4",
+		wantStrID:   STRING,
+		wantStr:     "hello",
+	}, {
+		in:          "_binary'hello'",
+		wantIntroID: UNDERSCORE_BINARY,
+		wantIntro:   "_binary",
+		wantStrID:   STRING,
+		wantStr:     "hello",
+	}}
+
+	for _, tcase := range testcases {
+		tkn := NewStringTokenizer(tcase.in)
+		introID, intro := tkn.Scan()
+		if introID != tcase.wantIntroID || string(intro) != tcase.wantIntro {
+			t.Fatalf("first Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(introID), intro, tokenName(tcase.wantIntroID), tcase.wantIntro)
+		}
+
+		strID, str := tkn.Scan()
+		if strID != tcase.wantStrID || string(str) != tcase.wantStr {
+			t.Fatalf("second Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(strID), str, tokenName(tcase.wantStrID), tcase.wantStr)
+		}
+	}
+}
+
 func TestScanSpatialSRIDKeyword(t *testing.T) {
 	id, out := NewStringTokenizer("srid").Scan()
 	if id != SRID || string(out) != "srid" {

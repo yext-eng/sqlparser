@@ -48,9 +48,10 @@ type Tokenizer struct {
 	multi          bool
 	specialComment *Tokenizer
 
-	buf     []byte
-	bufPos  int
-	bufSize int
+	buf         []byte
+	bufPos      int
+	bufSize     int
+	unreadChars []uint16
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -722,6 +723,9 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 	if keywordID, found := keywords[loweredStr]; found {
 		return keywordID, lowered
 	}
+	if isCharsetIntroducerToken(buffer.Bytes()) && tkn.scanAheadForStringLiteral() {
+		return UNDERSCORE_CHARSET, lowered
+	}
 	// dual must always be case-insensitive
 	if loweredStr == "dual" {
 		return ID, lowered
@@ -985,6 +989,12 @@ func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 }
 
 func (tkn *Tokenizer) next() {
+	if n := len(tkn.unreadChars); n > 0 {
+		tkn.Position++
+		tkn.lastChar = tkn.unreadChars[n-1]
+		tkn.unreadChars = tkn.unreadChars[:n-1]
+		return
+	}
 	if tkn.bufPos >= tkn.bufSize && tkn.InStream != nil {
 		// Try and refill the buffer
 		var err error
@@ -1014,6 +1024,42 @@ func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
 	tkn.ForceEOF = false
+	tkn.unreadChars = nil
+}
+
+func isCharsetIntroducerToken(tok []byte) bool {
+	return len(tok) > 1 && tok[0] == '_'
+}
+
+func isBlank(ch uint16) bool {
+	return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t'
+}
+
+func (tkn *Tokenizer) scanAheadForStringLiteral() bool {
+	originalChar := tkn.lastChar
+	if originalChar == '\'' || originalChar == '"' {
+		return true
+	}
+	if !isBlank(originalChar) {
+		return false
+	}
+
+	var replay []uint16
+	for isBlank(tkn.lastChar) {
+		tkn.next()
+		replay = append(replay, tkn.lastChar)
+	}
+	isLiteral := tkn.lastChar == '\'' || tkn.lastChar == '"'
+	tkn.restoreLookahead(originalChar, replay)
+	return isLiteral
+}
+
+func (tkn *Tokenizer) restoreLookahead(originalChar uint16, replay []uint16) {
+	tkn.lastChar = originalChar
+	tkn.Position -= len(replay)
+	for i := len(replay) - 1; i >= 0; i-- {
+		tkn.unreadChars = append(tkn.unreadChars, replay[i])
+	}
 }
 
 func isLetter(ch uint16) bool {

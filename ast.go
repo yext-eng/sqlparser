@@ -2919,6 +2919,7 @@ func (*Subquery) iExpr()         {}
 func (ListArg) iExpr()           {}
 func (*BinaryExpr) iExpr()       {}
 func (*UnaryExpr) iExpr()        {}
+func (*IntroducerExpr) iExpr()   {}
 func (*IntervalExpr) iExpr()     {}
 func (*CollateExpr) iExpr()      {}
 func (*FuncExpr) iExpr()         {}
@@ -3578,6 +3579,31 @@ func (node *UnaryExpr) walkSubtree(visit Visit) error {
 }
 
 func (node *UnaryExpr) replace(from, to Expr) bool {
+	return replaceExprs(from, to, &node.Expr)
+}
+
+// IntroducerExpr represents a character set introducer applied to a string literal.
+type IntroducerExpr struct {
+	CharacterSet string
+	Expr         Expr
+}
+
+// Format formats the node.
+func (node *IntroducerExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s %v", node.CharacterSet, node.Expr)
+}
+
+func (node *IntroducerExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+	)
+}
+
+func (node *IntroducerExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
 }
 

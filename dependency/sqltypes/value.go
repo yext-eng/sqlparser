@@ -23,10 +23,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/yext/sqlparser/dependency/bytes2"
-	"github.com/yext/sqlparser/dependency/hack"
-
-	"github.com/yext/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/bytes2"
+	"github.com/yext-eng/sqlparser/dependency/hack"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
 )
 
 var (

@@ -17,7 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
-	querypb "github.com/yext/sqlparser/dependency/querypb"
+	querypb "github.com/yext-eng/sqlparser/dependency/querypb"
 )
 
 // Functions in this file should only be used for testing.

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/yext/sqlparser/dependency/sqltypes"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 // These constants are used to identify the SQL statement type.

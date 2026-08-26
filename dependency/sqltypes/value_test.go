@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yext/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
 )
 
 const (

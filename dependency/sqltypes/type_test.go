@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"testing"
 
-	"github.com/yext/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
 )
 
 func TestTypeValues(t *testing.T) {

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yext/sqlparser/dependency/sqltypes"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 func TestPreview(t *testing.T) {

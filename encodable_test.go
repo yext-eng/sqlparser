@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/yext/sqlparser/dependency/sqltypes"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 func TestEncodable(t *testing.T) {

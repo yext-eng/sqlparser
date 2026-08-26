@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/yext/sqlparser/dependency/querypb"
-	"github.com/yext/sqlparser/dependency/sqltypes"
+	"github.com/yext-eng/sqlparser/dependency/querypb"
+	"github.com/yext-eng/sqlparser/dependency/sqltypes"
 )
 
 func TestNormalize(t *testing.T) {

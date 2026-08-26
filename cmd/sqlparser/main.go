@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/yext/sqlparser"
+	"github.com/yext-eng/sqlparser"
 )
 
 type ParseErr struct {
